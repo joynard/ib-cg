@@ -13,13 +13,13 @@ const GAME_ROUNDS = [
   },
   {
     id: 2,
-    title: "Ronde 2 — Kejutan",
+    title: "Ronde 2 — Plot Twist",
     badge: "RONDE 2 DARI 4",
     question: "Apa satu hal yang awalnya kamu pikir TIDAK AKAN kamu lakukan tahun ini, tapi ternyata malah kamu lakukan?"
   },
   {
     id: 3,
-    title: "Ronde 3 — Saat Ini",
+    title: "Ronde 3 — At the Moment",
     badge: "RONDE 3 DARI 4",
     question: "Apa satu hal dalam hidupmu saat ini yang paling kamu syukuri?"
   },
