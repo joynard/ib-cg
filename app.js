@@ -278,7 +278,15 @@ class AnonymousBoxGame {
 
   clearSessionAndReload() {
     localStorage.removeItem(STORAGE_KEY);
-    location.reload();
+    if (window.realtimeEngine) {
+      if (window.realtimeEngine.peer) {
+        try { window.realtimeEngine.peer.destroy(); } catch (e) {}
+      }
+      if (window.realtimeEngine.broadcastChannel) {
+        try { window.realtimeEngine.broadcastChannel.close(); } catch (e) {}
+      }
+    }
+    window.location.href = window.location.origin + window.location.pathname;
   }
 
   startSessionTimer() {
