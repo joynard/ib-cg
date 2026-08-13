@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>The Anonymous Box | IB CG</title>
+  <meta name="description" content="A real-time anonymous social experiment icebreaker game for Connect Groups with a sleek Red & White visual aesthetic.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- PeerJS for WebRTC Realtime Room Connection -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow glow-top"></div>
+
+  <div class="app-container">
+    <!-- Top Bar Navigation / Game Meta -->
+    <header class="top-bar">
+      <div class="brand">
+        <h1 class="brand-title">THE ANONYMOUS BOX</h1>
+      </div>
+      <div class="top-meta" id="topMeta" style="display: none;">
+        <span class="room-pill">ROOM: <strong id="displayRoomCode">BOX-XXXX</strong></span>
+        <span class="timer-pill" id="sessionTimer">10:00</span>
+        <button class="btn-host-menu" id="btnHostMenu" style="display: none;" title="Pengaturan Host">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Main Dynamic Screen Container -->
+    <main class="main-content">
+      
+      <!-- SCREEN 1: WELCOME & MODE SELECT -->
+      <section class="screen active" id="screenWelcome">
+        <div class="hero-card">
+          <p class="hero-subtitle">No names. One box.</p>
+
+          <div class="disclaimer-box">
+            <p class="disclaimer-text">
+              Semua jawaban yang kamu kirimkan akan muncul secara <strong>anonim</strong>. Bagikan aja yang menurutmu nyaman untuk dishare.
+            </p>
+          </div>
+
+          <div class="mode-selection">
+            <div class="form-group">
+              <label for="playerNameInput">Nama Anda <span class="label-hint">(bkn nama lengkap, pggln aj)</span></label>
+              <input type="text" id="playerNameInput" placeholder="Contoh: Lapod" maxlength="15" autocomplete="off">
+            </div>
+
+            <div class="action-grid">
+              <button class="btn btn-primary btn-large" id="btnCreateRoom">
+                Buat Room Baru (Host)
+              </button>
+              
+              <div class="join-divider"><span>ATAU GABUNG ROOM</span></div>
+
+              <div class="join-input-group">
+                <input type="text" id="joinCodeInput" placeholder="KODE ROOM" uppercase maxlength="8">
+                <button class="btn btn-secondary" id="btnJoinRoom">Gabung</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 2: ROOM LOBBY -->
+      <section class="screen" id="screenLobby">
+        <div class="lobby-card">
+          <div class="lobby-header">
+            <h2 class="section-title">LOBBY GAME</h2>
+            <div class="code-badge-container">
+              <span class="code-label">KODE ROOM</span>
+              <div class="code-badge" id="lobbyCodeBadge">
+                <span id="lobbyCodeText">BOX-0000</span>
+                <button class="btn-copy" id="btnCopyCode" title="Salin Kode">Salin</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="lobby-subtitle">Menunggu pemain lain bergabung (2 - 12 pemain)...</p>
+
+          <div class="player-count-bar">
+            <span>PEMAIN TERHUBUNG</span>
+            <span class="count-pill"><strong id="connectedCount">1</strong> / <span id="maxPlayersDisplay">12</span></span>
+          </div>
+
+          <div class="player-list" id="playerListContainer">
+            <!-- Dynamically populated player badges -->
+          </div>
+
+          <div class="lobby-actions">
+            <button class="btn btn-primary btn-large" id="btnStartGame" disabled>
+              Mulai Icebreaker
+            </button>
+            <p class="host-notice" id="hostNotice">Menunggu Host memulai sesi...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 3: SUBMISSION SCREEN -->
+      <section class="screen" id="screenSubmit">
+        <div class="submit-card">
+          <div class="round-badge" id="submitRoundBadge">ROUND 1 OF 4</div>
+          <h2 class="round-title" id="submitRoundTitle">Something Random</h2>
+          
+          <div class="question-box">
+            <h3 class="question-text" id="submitQuestionText">Loading question...</h3>
+          </div>
+
+          <div class="form-group">
+            <textarea id="answerInput" rows="4" maxlength="280"></textarea>
+            <div class="char-count"><span id="charCount">0</span>/280</div>
+          </div>
+
+          <button class="btn btn-primary btn-large" id="btnSubmitAnswer">
+            Kirimkan Secara Anonim
+          </button>
+        </div>
+      </section>
+
+      <!-- SCREEN 4: WAITING FOR SUBMISSIONS -->
+      <section class="screen" id="screenWaiting">
+        <div class="waiting-card">
+          <div class="box-icon-flat">BOX</div>
+          <h2>MENGUMPULKAN JAWABAN...</h2>
+          <p class="waiting-subtitle">Jawaban kamu sudah tersimpan di dalam Box.</p>
+          
+          <div class="submission-progress">
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="submissionProgressFill" style="width: 20%;"></div>
+            </div>
+            <p class="progress-status"><span id="submittedCount">0</span> dari <span id="totalPlayersCount">0</span> pemain telah menjawab</p>
+          </div>
+
+          <div class="waiting-loader">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 5: CARD REVEAL & INTERACTION -->
+      <section class="screen" id="screenReveal">
+        <div class="reveal-card-container">
+          <div class="reveal-header">
+            <span class="round-indicator" id="revealRoundIndicator">ROUND 1 • CARD 1 OF 6</span>
+            <div class="author-status-pill" id="authorStatusPill">ENTRY ANONIM</div>
+          </div>
+
+          <div class="anonymous-submission-box" id="submissionBox">
+            <span class="quote-mark">“</span>
+            <p class="submission-content" id="revealContentText">Loading response...</p>
+            <span class="quote-mark close">”</span>
+          </div>
+
+          <!-- Anonymous Live Reactions Bar -->
+          <div class="reactions-section">
+            <span class="reactions-label">REAKSI ANONIM</span>
+            <div class="reactions-grid">
+              <button class="reaction-btn" data-reaction="relate">
+                <span class="reaction-name">I Relate</span>
+                <span class="reaction-count" id="countRelate">0</span>
+              </button>
+              <button class="reaction-btn" data-reaction="understand">
+                <span class="reaction-name">I Understand</span>
+                <span class="reaction-count" id="countUnderstand">0</span>
+              </button>
+              <button class="reaction-btn" data-reaction="moredetails">
+                <span class="reaction-name">Want to Hear More</span>
+                <span class="reaction-count" id="countMore">0</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Round 3 Special Choice: Tell Us vs Keep Anonymous -->
+          <div class="story-choice-box" id="storyChoiceBox" style="display: none;">
+            <p class="story-choice-title">PILIHAN PENULIS:</p>
+            <div class="story-choice-actions">
+              <button class="btn btn-tell" id="btnTellStory">Ceritakan Langsung</button>
+              <button class="btn btn-anonymous" id="btnKeepStoryAnon">Tetap Anonim</button>
+            </div>
+          </div>
+
+          <!-- "Trust the Room" Controls -->
+          <div class="trust-controls" id="trustControls">
+            <div class="trust-label">TRUST THE ROOM</div>
+            <div class="trust-actions">
+              <button class="btn btn-trust-anon" id="btnKeepAnon">Tetap Anonim</button>
+              <button class="btn btn-trust-guess" id="btnGuessWho">Tebak Siapa</button>
+              <button class="btn btn-trust-reveal" id="btnRevealMe">Ungkap Penulis</button>
+            </div>
+          </div>
+
+          <!-- Voting Modal/Chips (When Guess Who is clicked) -->
+          <div class="guess-voting-box" id="guessVotingBox" style="display: none;">
+            <p class="guess-instruction">Siapa di ruangan ini yang menulis jawaban ini?</p>
+            <div class="guess-chips-grid" id="guessChipsGrid">
+              <!-- Dynamically populated name chips -->
+            </div>
+            <div class="guess-result" id="guessResult" style="display: none;">
+              <!-- Guess result text -->
+            </div>
+          </div>
+
+          <!-- Next Card / Next Round Navigation (Host/Controller) -->
+          <div class="reveal-nav">
+            <button class="btn btn-primary btn-large" id="btnNextCard">
+              Entry Selanjutnya ➔
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 6: GAME ENDING SCREEN -->
+      <section class="screen" id="screenEnding">
+        <div class="ending-card">
+          <div class="box-icon-flat ending">THE BOX</div>
+          <h1 class="ending-title">THE BOX IS EMPTY.</h1>
+          
+          <div class="ending-summary">
+            <p class="summary-line"><strong id="finalPlayerCount">6</strong> orang berkumpul.</p>
+            <p class="summary-line">Setiap orang telah berbagi.</p>
+            <p class="summary-line">Beberapa cerita terasa lucu.</p>
+            <p class="summary-line">Beberapa tak terduga.</p>
+            <p class="summary-line">Dan beberapa tetap menjadi rahasia anonim.</p>
+          </div>
+
+          <div class="ending-highlight">
+            <p>Sekarang kalian mengenal satu sama lain lebih dekat.</p>
+            <h2 class="connect-starts">CONNECT STARTS NOW.</h2>
+          </div>
+
+          <button class="btn btn-primary btn-large" id="btnPlayAgain">
+            Mulai Sesi Baru
+          </button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Host Control Modal Sheet -->
+  <div id="hostModalSheet" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h3 class="modal-title">PENGATURAN SESI (HOST)</h3>
+      <p class="modal-subtitle">Kelola alur atau restart sesi game jika terjadi kendala.</p>
+      
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-large" id="btnHostRestartGame">
+          Restart Sesi (Ke Ronde 1)
+        </button>
+        <button class="btn btn-primary btn-large" id="btnHostEndRoom">
+          Akhiri Sesi & Tutup Room
+        </button>
+        <button class="btn btn-trust-anon btn-large" id="btnHostCloseModal">
+          Tutup Menu
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Popup -->
+  <div id="toastNotification" class="toast-popup" aria-live="polite"></div>
+
+  <script src="realtime.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
