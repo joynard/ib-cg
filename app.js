@@ -25,7 +25,7 @@ const GAME_ROUNDS = [
   },
   {
     id: 4,
-    title: "Ronde 4 — Pertanyaan yang Tak Pernah Ditanyakan",
+    title: "Ronde 4 — Appreciation or Unspoken Things",
     badge: "RONDE 4 DARI 4",
     question: "Tuliskan sesuatu yang kamu apresiasi dari seseorang di ruangan ini (atau hal yang kamu harap orang pahami tentangmu)."
   }
