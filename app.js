@@ -73,6 +73,7 @@ class AnonymousBoxGame {
     this.btnJoinRoom = document.getElementById('btnJoinRoom');
     
     // Top bar & Host Menu
+    this.topBar = document.querySelector('.top-bar');
     this.topMeta = document.getElementById('topMeta');
     this.displayRoomCode = document.getElementById('displayRoomCode');
     this.sessionTimer = document.getElementById('sessionTimer');
@@ -196,6 +197,16 @@ class AnonymousBoxGame {
     if (this.screens[screenKey]) {
       this.screens[screenKey].classList.add('active');
     }
+
+    if (this.topBar) {
+      if (screenKey === 'welcome') {
+        this.topBar.classList.add('is-home');
+        if (this.topMeta) this.topMeta.style.display = 'none';
+      } else {
+        this.topBar.classList.remove('is-home');
+      }
+    }
+
     this.saveSessionState();
   }
 

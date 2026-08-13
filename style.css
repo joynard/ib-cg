@@ -104,6 +104,21 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Home Screen Specific Centered Header Layout */
+.top-bar.is-home {
+  justify-content: center;
+}
+
+.top-bar.is-home .brand {
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+}
+
+.top-bar.is-home .brand-title {
+  text-align: center;
+}
+
 .top-meta {
   display: flex;
   align-items: center;
