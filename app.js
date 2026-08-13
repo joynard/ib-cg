@@ -671,10 +671,23 @@ class AnonymousBoxGame {
   }
 
   handleKeepAnon() {
-    this.showToast('Entry tetap 100% Anonim.');
+    this.showToast('Grup sepakat mempertahankan entry ini 100% Anonim.');
+    if (this.guessVotingBox) this.guessVotingBox.style.display = 'none';
   }
 
   handleGuessWho() {
+    const cardList = this.submissions[this.currentRoundIndex];
+    if (!cardList || !cardList[this.currentCardIndex]) return;
+
+    if (!this.guessedCards) this.guessedCards = new Set();
+    const currentCard = cardList[this.currentCardIndex];
+    const cardKey = `r${this.currentRoundIndex}-c${this.currentCardIndex}`;
+
+    if (this.guessedCards.has(cardKey)) {
+      this.showToast('Kamu sudah menggunakan 1x kesempatan tebak untuk kartu ini.');
+      return;
+    }
+
     this.guessVotingBox.style.display = 'block';
     this.guessChipsGrid.innerHTML = '';
 
@@ -683,15 +696,20 @@ class AnonymousBoxGame {
       chip.className = 'guess-chip';
       chip.textContent = p.name;
       chip.addEventListener('click', () => {
-        const cardList = this.submissions[this.currentRoundIndex];
-        const currentCard = cardList[this.currentCardIndex];
-        
+        if (this.guessedCards.has(cardKey)) {
+          this.showToast('Kesempatan menebakmu untuk kartu ini sudah habis.');
+          return;
+        }
+
+        // Mark 1-guess attempt used
+        this.guessedCards.add(cardKey);
+
         this.guessResult.style.display = 'block';
         if (p.name.toLowerCase() === currentCard.authorName.toLowerCase()) {
           this.guessResult.textContent = `Tepat! Jawaban ini ditulis oleh ${p.name}.`;
           this.handleRevealAuthor();
         } else {
-          this.guessResult.textContent = `Bukan ${p.name}. Silakan diskusikan lagi dengan grup.`;
+          this.guessResult.textContent = `Bukan ${p.name}. Kesempatan menebakmu untuk kartu ini habis!`;
         }
       });
       this.guessChipsGrid.appendChild(chip);
