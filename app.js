@@ -47,6 +47,7 @@ class AnonymousBoxGame {
     // 1-Reaction Tracking per Player per Card
     this.myReactions = {}; // { 'r0-c1': 'relate' }
     this.userCardReactions = {}; // For Host: { 'r0-c1-playerName': 'relate' }
+    this.guessedCards = new Set(); // Track forfeited or used guesses: Set(['r0-c1'])
 
     // Session Timer (10 Minutes)
     this.timerSeconds = 600;
@@ -230,6 +231,7 @@ class AnonymousBoxGame {
       timerSeconds: this.timerSeconds,
       myReactions: this.myReactions || {},
       userCardReactions: this.userCardReactions || {},
+      guessedCards: this.guessedCards ? Array.from(this.guessedCards) : [],
       timestamp: Date.now()
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
@@ -257,6 +259,7 @@ class AnonymousBoxGame {
       this.timerSeconds = data.timerSeconds || 600;
       this.myReactions = data.myReactions || {};
       this.userCardReactions = data.userCardReactions || {};
+      this.guessedCards = new Set(data.guessedCards || []);
 
       // Re-initialize peer connection
       if (this.mode === 'HOST') {
@@ -748,8 +751,15 @@ class AnonymousBoxGame {
   }
 
   handleKeepAnon() {
-    this.showToast('Grup sepakat mempertahankan entry ini 100% Anonim.');
+    if (!this.guessedCards) this.guessedCards = new Set();
+    const cardKey = `r${this.currentRoundIndex}-c${this.currentCardIndex}`;
+    
+    // Forfeit the player's guess opportunity for this card
+    this.guessedCards.add(cardKey);
+
+    this.showToast('Kamu memilih tidak menebak. Kesempatan tebak pada kartu ini dihanguskan.');
     if (this.guessVotingBox) this.guessVotingBox.style.display = 'none';
+    this.saveSessionState();
   }
 
   handleGuessWho() {
@@ -761,7 +771,7 @@ class AnonymousBoxGame {
     const cardKey = `r${this.currentRoundIndex}-c${this.currentCardIndex}`;
 
     if (this.guessedCards.has(cardKey)) {
-      this.showToast('Kamu sudah menggunakan 1x kesempatan tebak untuk kartu ini.');
+      this.showToast('Kesempatan menebakmu untuk kartu ini sudah habis atau telah dihanguskan.');
       return;
     }
 
