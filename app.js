@@ -320,9 +320,7 @@ class AnonymousBoxGame {
       this.btnHostMenu.style.display = 'inline-flex';
     }
 
-    this.timerInterval = setInterval(() => {
-      this.timerSeconds--;
-      
+    const renderTimer = () => {
       const absSecs = Math.abs(this.timerSeconds);
       const mins = Math.floor(absSecs / 60).toString().padStart(2, '0');
       const secs = (absSecs % 60).toString().padStart(2, '0');
@@ -334,6 +332,14 @@ class AnonymousBoxGame {
       } else {
         this.sessionTimer.classList.remove('timer-expired');
       }
+    };
+
+    // Render immediately
+    renderTimer();
+
+    this.timerInterval = setInterval(() => {
+      this.timerSeconds--;
+      renderTimer();
 
       if (Math.abs(this.timerSeconds) % 10 === 0) {
         this.saveSessionState();
@@ -348,10 +354,15 @@ class AnonymousBoxGame {
     this.currentRoundIndex = 0;
     this.submissions = {};
     this.currentCardIndex = 0;
+    this.myReactions = {};
+    this.userCardReactions = {};
+    this.guessedCards = new Set();
+    this.timerSeconds = 600; // Reset to 10:00
 
-    window.realtimeEngine.broadcast('HOST_RESTART_GAME', {});
+    window.realtimeEngine.broadcast('HOST_RESTART_GAME', { timerSeconds: 600 });
+    this.startSessionTimer();
     this.startRound(0);
-    this.showToast('Sesi game di-restart ke Ronde 1!');
+    this.showToast('Sesi game & timer di-restart ke Ronde 1!');
   }
 
   handleHostEndRoom() {
@@ -1020,7 +1031,12 @@ class AnonymousBoxGame {
         this.currentRoundIndex = 0;
         this.submissions = {};
         this.currentCardIndex = 0;
-        this.showToast('Host telah mengulang sesi game dari Ronde 1.');
+        this.myReactions = {};
+        this.userCardReactions = {};
+        this.guessedCards = new Set();
+        this.timerSeconds = (payload && payload.timerSeconds) ? payload.timerSeconds : 600;
+        this.startSessionTimer();
+        this.showToast('Host telah mengulang sesi game & timer dari Ronde 1.');
         this.startRound(0);
         break;
 
