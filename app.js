@@ -44,6 +44,10 @@ class AnonymousBoxGame {
     this.currentCardIndex = 0;
     this.activeScreenKey = 'welcome';
     
+    // 1-Reaction Tracking per Player per Card
+    this.myReactions = {}; // { 'r0-c1': 'relate' }
+    this.userCardReactions = {}; // For Host: { 'r0-c1-playerName': 'relate' }
+
     // Session Timer (10 Minutes)
     this.timerSeconds = 600;
     this.timerInterval = null;
@@ -224,6 +228,8 @@ class AnonymousBoxGame {
       currentCardIndex: this.currentCardIndex,
       activeScreenKey: this.activeScreenKey,
       timerSeconds: this.timerSeconds,
+      myReactions: this.myReactions || {},
+      userCardReactions: this.userCardReactions || {},
       timestamp: Date.now()
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
@@ -249,6 +255,8 @@ class AnonymousBoxGame {
       this.submissions = data.submissions || {};
       this.currentCardIndex = data.currentCardIndex || 0;
       this.timerSeconds = data.timerSeconds || 600;
+      this.myReactions = data.myReactions || {};
+      this.userCardReactions = data.userCardReactions || {};
 
       // Re-initialize peer connection
       if (this.mode === 'HOST') {
@@ -613,6 +621,19 @@ class AnonymousBoxGame {
     this.countUnderstand.textContent = currentCard.reactions.understand || 0;
     this.countMore.textContent = currentCard.reactions.moredetails || 0;
 
+    // Highlight user's selected reaction for this card
+    const cardKey = `r${this.currentRoundIndex}-c${this.currentCardIndex}`;
+    const userReaction = this.myReactions ? this.myReactions[cardKey] : null;
+
+    document.querySelectorAll('.reaction-btn').forEach(btn => {
+      const type = btn.getAttribute('data-reaction');
+      if (userReaction && type === userReaction) {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.remove('selected');
+      }
+    });
+
     this.guessVotingBox.style.display = 'none';
     this.guessResult.style.display = 'none';
 
@@ -651,23 +672,79 @@ class AnonymousBoxGame {
     if (!cardList || !cardList[this.currentCardIndex]) return;
 
     const currentCard = cardList[this.currentCardIndex];
-    currentCard.reactions[reactionType] = (currentCard.reactions[reactionType] || 0) + 1;
+    if (!this.myReactions) this.myReactions = {};
+    const cardKey = `r${this.currentRoundIndex}-c${this.currentCardIndex}`;
+    const prevReaction = this.myReactions[cardKey];
 
-    if (this.mode === 'CLIENT') {
-      window.realtimeEngine.sendToHost('REACTION', {
-        roundIndex: this.currentRoundIndex,
-        cardIndex: this.currentCardIndex,
-        reactionType: reactionType
-      });
-    } else if (this.mode === 'HOST') {
+    // Trigger visual pop & particle feedback on the pressed button
+    this.spawnReactionParticle(reactionType);
+
+    // If player already reacted with this exact reaction:
+    if (prevReaction === reactionType) {
+      this.showToast('Kamu sudah memberikan reaksi ini.');
+      return;
+    }
+
+    // Switch or add reaction (1 reaction per player per card)
+    if (prevReaction && currentCard.reactions[prevReaction] > 0) {
+      currentCard.reactions[prevReaction] = Math.max(0, currentCard.reactions[prevReaction] - 1);
+    }
+    currentCard.reactions[reactionType] = (currentCard.reactions[reactionType] || 0) + 1;
+    this.myReactions[cardKey] = reactionType;
+
+    // Track on Host side to prevent duplicate packet counting
+    if (this.mode === 'HOST') {
+      this.userCardReactions = this.userCardReactions || {};
+      const userKey = `r${this.currentRoundIndex}-c${this.currentCardIndex}-${this.playerName}`;
+      this.userCardReactions[userKey] = reactionType;
+
       window.realtimeEngine.broadcast('SYNC_CARD_UPDATE', {
         cardIndex: this.currentCardIndex,
         card: currentCard
+      });
+    } else if (this.mode === 'CLIENT') {
+      window.realtimeEngine.sendToHost('REACTION', {
+        roundIndex: this.currentRoundIndex,
+        cardIndex: this.currentCardIndex,
+        reactionType: reactionType,
+        prevReaction: prevReaction,
+        authorName: this.playerName
       });
     }
 
     this.renderCurrentRevealCard();
     this.saveSessionState();
+  }
+
+  spawnReactionParticle(reactionType) {
+    const button = document.querySelector(`.reaction-btn[data-reaction="${reactionType}"]`);
+    if (!button) return;
+
+    button.classList.remove('pop-animate');
+    void button.offsetWidth; // Force reflow to restart animation
+    button.classList.add('pop-animate');
+
+    const countEl = button.querySelector('.reaction-count');
+    if (countEl) {
+      countEl.classList.remove('bump');
+      void countEl.offsetWidth;
+      countEl.classList.add('bump');
+    }
+
+    const icons = {
+      relate: '+1 🤝',
+      understand: '+1 💡',
+      moredetails: '+1 🗣️'
+    };
+
+    const particle = document.createElement('span');
+    particle.className = 'reaction-floating-particle';
+    particle.textContent = icons[reactionType] || '+1';
+    button.appendChild(particle);
+
+    setTimeout(() => {
+      if (particle.parentNode) particle.remove();
+    }, 850);
   }
 
   handleKeepAnon() {
@@ -870,14 +947,33 @@ class AnonymousBoxGame {
 
       case 'REACTION':
         if (this.mode === 'HOST') {
-          const card = this.submissions[payload.roundIndex][payload.cardIndex];
-          card.reactions[payload.reactionType] = (card.reactions[payload.reactionType] || 0) + 1;
-          window.realtimeEngine.broadcast('SYNC_CARD_UPDATE', {
-            cardIndex: payload.cardIndex,
-            card: card
-          });
-          this.renderCurrentRevealCard();
-          this.saveSessionState();
+          const cardList = this.submissions[payload.roundIndex];
+          if (cardList && cardList[payload.cardIndex]) {
+            const card = cardList[payload.cardIndex];
+            const senderName = payload.authorName || (conn ? conn.peer : 'guest');
+            const userKey = `r${payload.roundIndex}-c${payload.cardIndex}-${senderName}`;
+
+            this.userCardReactions = this.userCardReactions || {};
+            const prevForUser = this.userCardReactions[userKey];
+
+            if (prevForUser === payload.reactionType) {
+              return; // Already counted this reaction from this user
+            }
+
+            if (prevForUser && card.reactions[prevForUser] > 0) {
+              card.reactions[prevForUser] = Math.max(0, card.reactions[prevForUser] - 1);
+            }
+
+            card.reactions[payload.reactionType] = (card.reactions[payload.reactionType] || 0) + 1;
+            this.userCardReactions[userKey] = payload.reactionType;
+
+            window.realtimeEngine.broadcast('SYNC_CARD_UPDATE', {
+              cardIndex: payload.cardIndex,
+              card: card
+            });
+            this.renderCurrentRevealCard();
+            this.saveSessionState();
+          }
         }
         break;
 
