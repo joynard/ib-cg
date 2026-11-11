@@ -87,7 +87,7 @@ body {
   z-index: 1;
   max-width: 900px;
   margin: 0 auto;
-  padding: 3rem 1.25rem 4rem;
+  padding: 4rem 1.25rem 4rem;
 }
 
 /* Header */
@@ -114,19 +114,19 @@ body {
 
 /* Games Grid */
 .games-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
+  display: flex;
   justify-content: center;
-  gap: 1.5rem;
   margin-bottom: 3.5rem;
 }
 
 /* Game Card */
 .game-card {
+  width: 100%;
+  max-width: 420px;
   background: var(--bg-card);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-lg);
-  padding: 1.6rem;
+  padding: 2rem 1.8rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -142,12 +142,7 @@ body {
   box-shadow: var(--shadow-hover);
 }
 
-.game-card.featured {
-  border-color: rgba(217, 119, 54, 0.4);
-  background: linear-gradient(180deg, #251b15 0%, #1f1612 100%);
-}
-
-.game-card.featured::before {
+.game-card::before {
   content: '';
   position: absolute;
   top: 0;
@@ -157,59 +152,24 @@ body {
   background: linear-gradient(90deg, var(--accent-amber), var(--accent-terracotta));
 }
 
-/* Card Header */
-.card-top {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  margin-bottom: 1.1rem;
-}
-
-.card-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.7rem;
-  background: var(--brown-800);
-  border: 1px solid var(--border-card);
-}
-
-.game-card.featured .card-icon {
-  background: rgba(217, 119, 54, 0.15);
-  border-color: rgba(217, 119, 54, 0.35);
-}
-
 /* Card Body */
 .card-content {
-  flex: 1;
-  margin-bottom: 1.4rem;
+  margin-bottom: 1.8rem;
 }
 
 .game-title {
   font-family: 'Outfit', sans-serif;
-  font-size: 1.35rem;
-  font-weight: 700;
+  font-size: 1.6rem;
+  font-weight: 800;
   color: var(--text-white);
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.85rem;
+  letter-spacing: -0.01em;
 }
 
-.game-meta-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.meta-tag {
-  font-size: 0.75rem;
-  font-weight: 600;
+.game-description {
+  font-size: 0.95rem;
   color: var(--text-muted);
-  background: var(--brown-900);
-  border: 1px solid rgba(220, 185, 160, 0.08);
-  padding: 0.22rem 0.55rem;
-  border-radius: var(--radius-sm);
+  line-height: 1.6;
 }
 
 /* Card Actions */
@@ -223,13 +183,13 @@ body {
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.82rem 1.2rem;
+  padding: 0.9rem 1.4rem;
   background: linear-gradient(135deg, var(--accent-amber), var(--accent-terracotta));
   color: #ffffff;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 800;
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -242,18 +202,12 @@ body {
   box-shadow: 0 6px 18px rgba(217, 119, 54, 0.4);
 }
 
-/* Responsive */
 @media (max-width: 640px) {
   .portal-container {
-    padding: 2rem 1rem 3rem;
+    padding: 2.5rem 1rem 3rem;
   }
   
-  .portal-header {
-    margin-bottom: 2rem;
-  }
-
-  .games-grid {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
+  .game-card {
+    padding: 1.6rem 1.4rem;
   }
 }
