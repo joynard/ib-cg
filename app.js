@@ -33,6 +33,41 @@ const GAME_ROUNDS = [
 
 const STORAGE_KEY = 'ANONYMOUS_BOX_SESSION_V1';
 
+// Security Whitelists & Sanitization Helpers (OWASP Hardening)
+const ALLOWED_CLIENT_ACTIONS = new Set([
+  'JOIN',
+  'REJOIN',
+  'SUBMIT_ANSWER',
+  'REACTION',
+  'REVEAL_AUTHOR',
+  'PING'
+]);
+
+const ALLOWED_HOST_ACTIONS = new Set([
+  'SYNC_PLAYERS',
+  'SYNC_FULL_STATE',
+  'START_ROUND',
+  'PROGRESS_UPDATE',
+  'START_REVEAL_PHASE',
+  'SYNC_CARD_UPDATE',
+  'SYNC_CARD_INDEX',
+  'SHOW_ENDING',
+  'HOST_RESTART_GAME',
+  'HOST_END_ROOM',
+  'PING'
+]);
+
+const ALLOWED_REACTIONS = new Set(['relate', 'understand', 'moredetails']);
+
+function sanitizeString(str, maxLen = 280) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/[<>&"']/g, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+    .trim()
+    .slice(0, maxLen);
+}
+
 class AnonymousBoxGame {
   constructor() {
     this.mode = null; // 'HOST' or 'CLIENT'
@@ -243,23 +278,40 @@ class AnonymousBoxGame {
 
     try {
       const data = JSON.parse(raw);
+      if (!data || typeof data !== 'object') {
+        localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+
       // Expire session if older than 2 hours
-      if (Date.now() - data.timestamp > 2 * 60 * 60 * 1000) {
+      if (!data.timestamp || Date.now() - data.timestamp > 2 * 60 * 60 * 1000) {
+        localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+
+      if (data.mode !== 'HOST' && data.mode !== 'CLIENT') {
         localStorage.removeItem(STORAGE_KEY);
         return;
       }
 
       this.mode = data.mode;
-      this.playerName = data.playerName;
-      this.roomCode = data.roomCode;
-      this.players = data.players || [];
-      this.currentRoundIndex = data.currentRoundIndex || 0;
-      this.submissions = data.submissions || {};
-      this.currentCardIndex = data.currentCardIndex || 0;
-      this.timerSeconds = data.timerSeconds || 600;
-      this.myReactions = data.myReactions || {};
-      this.userCardReactions = data.userCardReactions || {};
-      this.guessedCards = new Set(data.guessedCards || []);
+      this.playerName = sanitizeString(data.playerName, 15);
+      this.roomCode = (data.roomCode || '').replace(/[^A-Z0-9-]/gi, '').toUpperCase().slice(0, 12);
+      this.players = Array.isArray(data.players) ? data.players.map(p => ({
+        id: String(p.id || '').slice(0, 32),
+        name: sanitizeString(p.name, 15),
+        isHost: Boolean(p.isHost)
+      })) : [];
+
+      this.currentRoundIndex = (Number.isInteger(data.currentRoundIndex) && data.currentRoundIndex >= 0 && data.currentRoundIndex < GAME_ROUNDS.length)
+        ? data.currentRoundIndex
+        : 0;
+      this.submissions = (data.submissions && typeof data.submissions === 'object') ? data.submissions : {};
+      this.currentCardIndex = (Number.isInteger(data.currentCardIndex) && data.currentCardIndex >= 0) ? data.currentCardIndex : 0;
+      this.timerSeconds = typeof data.timerSeconds === 'number' ? data.timerSeconds : 600;
+      this.myReactions = (data.myReactions && typeof data.myReactions === 'object') ? data.myReactions : {};
+      this.userCardReactions = (data.userCardReactions && typeof data.userCardReactions === 'object') ? data.userCardReactions : {};
+      this.guessedCards = new Set(Array.isArray(data.guessedCards) ? data.guessedCards : []);
 
       // Re-initialize peer connection
       if (this.mode === 'HOST') {
@@ -389,7 +441,7 @@ class AnonymousBoxGame {
   // --- ROOM SETUP LOGIC ---
 
   handleCreateRoom() {
-    const name = this.playerNameInput.value.trim();
+    const name = sanitizeString(this.playerNameInput.value, 15);
     if (!name) {
       this.showToast('Silakan masukkan nama Anda terlebih dahulu.');
       return;
@@ -410,8 +462,8 @@ class AnonymousBoxGame {
   }
 
   handleJoinRoom() {
-    const name = this.playerNameInput.value.trim();
-    const code = this.joinCodeInput.value.trim().toUpperCase();
+    const name = sanitizeString(this.playerNameInput.value, 15);
+    const code = this.joinCodeInput.value.replace(/[^A-Z0-9-]/gi, '').trim().toUpperCase().slice(0, 12);
 
     if (!name) {
       this.showToast('Silakan masukkan nama Anda terlebih dahulu.');
@@ -437,7 +489,8 @@ class AnonymousBoxGame {
   }
 
   onPlayerConnected(conn) {
-    const name = conn.metadata ? conn.metadata.name : `Pemain ${this.players.length + 1}`;
+    const rawName = conn.metadata ? conn.metadata.name : `Pemain ${this.players.length + 1}`;
+    const name = sanitizeString(rawName, 15) || `Pemain ${this.players.length + 1}`;
     
     const existingIndex = this.players.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
     if (existingIndex >= 0) {
@@ -462,7 +515,14 @@ class AnonymousBoxGame {
     this.players.forEach(p => {
       const chip = document.createElement('div');
       chip.className = `player-chip ${p.isHost ? 'is-host' : ''}`;
-      chip.innerHTML = `${p.isHost ? '<span class="host-tag">HOST</span>' : ''} ${p.name}`;
+      if (p.isHost) {
+        const hostTag = document.createElement('span');
+        hostTag.className = 'host-tag';
+        hostTag.textContent = 'HOST';
+        chip.appendChild(hostTag);
+        chip.appendChild(document.createTextNode(' '));
+      }
+      chip.appendChild(document.createTextNode(p.name));
       this.playerListContainer.appendChild(chip);
     });
 
@@ -511,7 +571,7 @@ class AnonymousBoxGame {
   }
 
   handleSubmitAnswer() {
-    const text = this.answerInput.value.trim();
+    const text = sanitizeString(this.answerInput.value, 280);
     if (!text) {
       this.showToast('Silakan tulis jawaban sebelum mengirim.');
       return;
@@ -534,21 +594,28 @@ class AnonymousBoxGame {
   }
 
   recordSubmission(payload, senderId) {
-    const roundIdx = payload.roundIndex;
+    if (!payload || typeof payload !== 'object') return;
+    const roundIdx = Number.isInteger(payload.roundIndex) ? payload.roundIndex : this.currentRoundIndex;
+    if (roundIdx < 0 || roundIdx >= GAME_ROUNDS.length) return;
+
+    const safeText = sanitizeString(payload.text, 280);
+    const safeAuthor = sanitizeString(payload.authorName, 15);
+    if (!safeText || !safeAuthor) return;
+
     if (!this.submissions[roundIdx]) {
       this.submissions[roundIdx] = [];
     }
 
     // Deduplicate by authorName so duplicate packets (BroadcastChannel + PeerJS) never double count!
     this.submissions[roundIdx] = this.submissions[roundIdx].filter(
-      s => s.authorName.toLowerCase() !== payload.authorName.toLowerCase()
+      s => s.authorName.toLowerCase() !== safeAuthor.toLowerCase()
     );
 
     this.submissions[roundIdx].push({
       id: `sub-${Date.now()}-${Math.random()}`,
-      senderId: senderId,
-      text: payload.text,
-      authorName: payload.authorName,
+      senderId: String(senderId || 'guest').slice(0, 32),
+      text: safeText,
+      authorName: safeAuthor,
       reactions: { relate: 0, understand: 0, moredetails: 0 },
       revealed: false
     });
@@ -881,20 +948,34 @@ class AnonymousBoxGame {
   // --- NETWORK MESSAGE RECEIVER ---
 
   onMessageReceived(data, conn) {
+    if (!data || typeof data !== 'object' || typeof data.action !== 'string') return;
     const { action, payload } = data;
+
+    // Defense-in-depth: enforce role authorization on network messages
+    if (this.mode === 'HOST' && !ALLOWED_CLIENT_ACTIONS.has(action)) {
+      console.warn('[Security] Dropped unauthorized client action:', action);
+      return;
+    }
+    if (this.mode === 'CLIENT' && !ALLOWED_HOST_ACTIONS.has(action)) {
+      console.warn('[Security] Dropped non-host authoritative action:', action);
+      return;
+    }
 
     switch (action) {
       case 'REJOIN':
         if (this.mode === 'HOST') {
           // Re-add player if missing
-          if (payload && payload.name) {
-            const exists = this.players.some(p => p.name.toLowerCase() === payload.name.toLowerCase());
-            if (!exists && conn) {
-              this.players.push({
-                id: conn.peer,
-                name: payload.name,
-                isHost: false
-              });
+          if (payload && typeof payload.name === 'string') {
+            const safeName = sanitizeString(payload.name, 15);
+            if (safeName) {
+              const exists = this.players.some(p => p.name.toLowerCase() === safeName.toLowerCase());
+              if (!exists && conn) {
+                this.players.push({
+                  id: String(conn.peer || '').slice(0, 32),
+                  name: safeName,
+                  isHost: false
+                });
+              }
             }
           }
           // Broadcast player list update
@@ -919,12 +1000,26 @@ class AnonymousBoxGame {
         break;
 
       case 'SYNC_FULL_STATE':
-        if (payload) {
-          this.currentRoundIndex = payload.currentRoundIndex || 0;
-          this.submissions = payload.submissions || {};
-          this.currentCardIndex = payload.currentCardIndex || 0;
-          this.timerSeconds = payload.timerSeconds || this.timerSeconds;
-          if (payload.players) this.players = payload.players;
+        if (payload && typeof payload === 'object') {
+          if (Number.isInteger(payload.currentRoundIndex) && payload.currentRoundIndex >= 0 && payload.currentRoundIndex < GAME_ROUNDS.length) {
+            this.currentRoundIndex = payload.currentRoundIndex;
+          }
+          if (payload.submissions && typeof payload.submissions === 'object') {
+            this.submissions = payload.submissions;
+          }
+          if (Number.isInteger(payload.currentCardIndex) && payload.currentCardIndex >= 0) {
+            this.currentCardIndex = payload.currentCardIndex;
+          }
+          if (typeof payload.timerSeconds === 'number') {
+            this.timerSeconds = payload.timerSeconds;
+          }
+          if (Array.isArray(payload.players)) {
+            this.players = payload.players.map(p => ({
+              id: String(p.id || '').slice(0, 32),
+              name: sanitizeString(p.name, 15),
+              isHost: Boolean(p.isHost)
+            }));
+          }
           this.updateLobbyUI();
 
           if (payload.activeScreenKey && payload.activeScreenKey !== 'welcome') {
@@ -942,37 +1037,54 @@ class AnonymousBoxGame {
         break;
 
       case 'SYNC_PLAYERS':
-        this.players = payload.players;
-        this.updateLobbyUI();
-        this.saveSessionState();
+        if (payload && Array.isArray(payload.players)) {
+          this.players = payload.players.map(p => ({
+            id: String(p.id || '').slice(0, 32),
+            name: sanitizeString(p.name, 15),
+            isHost: Boolean(p.isHost)
+          }));
+          this.updateLobbyUI();
+          this.saveSessionState();
+        }
         break;
 
       case 'START_ROUND':
-        this.startRound(payload.roundIndex);
+        if (payload && Number.isInteger(payload.roundIndex) && payload.roundIndex >= 0 && payload.roundIndex < GAME_ROUNDS.length) {
+          this.startRound(payload.roundIndex);
+        }
         break;
 
       case 'SUBMIT_ANSWER':
-        if (this.mode === 'HOST') {
+        if (this.mode === 'HOST' && payload) {
           this.recordSubmission(payload, conn ? conn.peer : 'client');
         }
         break;
 
       case 'PROGRESS_UPDATE':
-        this.showWaitingScreen(payload.received, payload.total);
+        if (payload && typeof payload.received === 'number' && typeof payload.total === 'number') {
+          this.showWaitingScreen(payload.received, payload.total);
+        }
         break;
 
       case 'START_REVEAL_PHASE':
-        this.submissions[payload.roundIndex] = payload.cards;
-        this.startRevealPhase();
+        if (payload && Number.isInteger(payload.roundIndex) && Array.isArray(payload.cards)) {
+          this.submissions[payload.roundIndex] = payload.cards;
+          this.startRevealPhase();
+        }
         break;
 
       case 'REACTION':
-        if (this.mode === 'HOST') {
-          const cardList = this.submissions[payload.roundIndex];
-          if (cardList && cardList[payload.cardIndex]) {
-            const card = cardList[payload.cardIndex];
-            const senderName = payload.authorName || (conn ? conn.peer : 'guest');
-            const userKey = `r${payload.roundIndex}-c${payload.cardIndex}-${senderName}`;
+        if (this.mode === 'HOST' && payload) {
+          if (!ALLOWED_REACTIONS.has(payload.reactionType)) return;
+          const roundIdx = Number.isInteger(payload.roundIndex) ? payload.roundIndex : -1;
+          const cardIdx = Number.isInteger(payload.cardIndex) ? payload.cardIndex : -1;
+          const cardList = this.submissions[roundIdx];
+
+          if (cardList && cardList[cardIdx]) {
+            const card = cardList[cardIdx];
+            const rawSender = payload.authorName || (conn ? conn.peer : 'guest');
+            const senderName = sanitizeString(rawSender, 15) || 'guest';
+            const userKey = `r${roundIdx}-c${cardIdx}-${senderName}`;
 
             this.userCardReactions = this.userCardReactions || {};
             const prevForUser = this.userCardReactions[userKey];
@@ -981,7 +1093,7 @@ class AnonymousBoxGame {
               return; // Already counted this reaction from this user
             }
 
-            if (prevForUser && card.reactions[prevForUser] > 0) {
+            if (prevForUser && ALLOWED_REACTIONS.has(prevForUser) && card.reactions[prevForUser] > 0) {
               card.reactions[prevForUser] = Math.max(0, card.reactions[prevForUser] - 1);
             }
 
@@ -989,7 +1101,7 @@ class AnonymousBoxGame {
             this.userCardReactions[userKey] = payload.reactionType;
 
             window.realtimeEngine.broadcast('SYNC_CARD_UPDATE', {
-              cardIndex: payload.cardIndex,
+              cardIndex: cardIdx,
               card: card
             });
             this.renderCurrentRevealCard();
@@ -999,28 +1111,38 @@ class AnonymousBoxGame {
         break;
 
       case 'REVEAL_AUTHOR':
-        if (this.mode === 'HOST') {
-          const card = this.submissions[payload.roundIndex][payload.cardIndex];
-          card.revealed = true;
-          window.realtimeEngine.broadcast('SYNC_CARD_UPDATE', {
-            cardIndex: payload.cardIndex,
-            card: card
-          });
-          this.renderCurrentRevealCard();
-          this.saveSessionState();
+        if (this.mode === 'HOST' && payload) {
+          const roundIdx = Number.isInteger(payload.roundIndex) ? payload.roundIndex : -1;
+          const cardIdx = Number.isInteger(payload.cardIndex) ? payload.cardIndex : -1;
+          if (this.submissions[roundIdx] && this.submissions[roundIdx][cardIdx]) {
+            const card = this.submissions[roundIdx][cardIdx];
+            card.revealed = true;
+            window.realtimeEngine.broadcast('SYNC_CARD_UPDATE', {
+              cardIndex: cardIdx,
+              card: card
+            });
+            this.renderCurrentRevealCard();
+            this.saveSessionState();
+          }
         }
         break;
 
       case 'SYNC_CARD_UPDATE':
-        this.submissions[this.currentRoundIndex][payload.cardIndex] = payload.card;
-        this.renderCurrentRevealCard();
-        this.saveSessionState();
+        if (payload && Number.isInteger(payload.cardIndex) && payload.card) {
+          if (this.submissions[this.currentRoundIndex]) {
+            this.submissions[this.currentRoundIndex][payload.cardIndex] = payload.card;
+            this.renderCurrentRevealCard();
+            this.saveSessionState();
+          }
+        }
         break;
 
       case 'SYNC_CARD_INDEX':
-        this.currentCardIndex = payload.cardIndex;
-        this.renderCurrentRevealCard();
-        this.saveSessionState();
+        if (payload && Number.isInteger(payload.cardIndex) && payload.cardIndex >= 0) {
+          this.currentCardIndex = payload.cardIndex;
+          this.renderCurrentRevealCard();
+          this.saveSessionState();
+        }
         break;
 
       case 'SHOW_ENDING':
@@ -1034,7 +1156,7 @@ class AnonymousBoxGame {
         this.myReactions = {};
         this.userCardReactions = {};
         this.guessedCards = new Set();
-        this.timerSeconds = (payload && payload.timerSeconds) ? payload.timerSeconds : 600;
+        this.timerSeconds = (payload && typeof payload.timerSeconds === 'number') ? payload.timerSeconds : 600;
         this.startSessionTimer();
         this.showToast('Host telah mengulang sesi game & timer dari Ronde 1.');
         this.startRound(0);

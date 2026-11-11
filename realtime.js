@@ -38,9 +38,10 @@ class RealtimeEngine {
     return `BOX-${code}`;
   }
 
-  // Deduplicate incoming packets
+  // Deduplicate and validate incoming packets
   isDuplicateMsg(data) {
-    if (!data || !data.msgId) return false;
+    if (!data || typeof data !== 'object') return true;
+    if (!data.msgId || typeof data.msgId !== 'string' || data.msgId.length > 64) return false;
     if (this.processedMsgIds.has(data.msgId)) {
       return true;
     }
@@ -49,10 +50,26 @@ class RealtimeEngine {
     return false;
   }
 
+  // Validate incoming packet integrity and payload boundary (max 32KB)
+  isValidPacket(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (typeof data.action !== 'string' || data.action.length > 32) return false;
+    try {
+      if (JSON.stringify(data).length > 32768) {
+        console.warn('[Security] Dropped packet exceeding maximum payload size.');
+        return false;
+      }
+    } catch (e) {
+      return false;
+    }
+    return true;
+  }
+
   // Initialize Host Room
   initHost(roomCode, onPlayerConnect, onMessage) {
     this.isHost = true;
-    this.roomCode = (roomCode || this.generateRoomCode()).toUpperCase();
+    const rawCode = roomCode || this.generateRoomCode();
+    this.roomCode = rawCode.replace(/[^A-Z0-9-]/gi, '').toUpperCase().slice(0, 12);
     this.onPlayerConnectCallback = onPlayerConnect;
     this.onMessageCallback = onMessage;
 
@@ -82,6 +99,7 @@ class RealtimeEngine {
         });
 
         conn.on('data', (data) => {
+          if (!this.isValidPacket(data)) return;
           if (data && data.action === 'PING') return;
           if (this.isDuplicateMsg(data)) return;
           if (this.onMessageCallback) {
@@ -111,8 +129,8 @@ class RealtimeEngine {
   // Initialize Client Join
   initClient(roomCode, playerName, onConnected, onMessage) {
     this.isHost = false;
-    this.roomCode = roomCode.toUpperCase();
-    this.playerName = playerName;
+    this.roomCode = (roomCode || '').replace(/[^A-Z0-9-]/gi, '').toUpperCase().slice(0, 12);
+    this.playerName = (playerName || '').replace(/[<>&"']/g, '').trim().slice(0, 15);
     this.onMessageCallback = onMessage;
     this.hasConnectedOnce = false;
     this.reconnectAttempts = 0;
@@ -176,7 +194,7 @@ class RealtimeEngine {
 
     this.broadcastChannel.onmessage = (event) => {
       const { sender, type, data } = event.data || {};
-      if (!data) return;
+      if (!data || !this.isValidPacket(data)) return;
 
       if (this.isDuplicateMsg(data)) return;
 
@@ -234,6 +252,7 @@ class RealtimeEngine {
     });
 
     this.hostConnection.on('data', (data) => {
+      if (!this.isValidPacket(data)) return;
       if (data && data.action === 'PING') return;
       if (this.isDuplicateMsg(data)) return;
       if (this.onMessageCallback) {
