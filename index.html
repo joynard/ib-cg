@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CG Game Hub | Kumpulan Game Connect Group</title>
-  <meta name="description" content="Portal kumpulan game interaktif dan icebreaker seru untuk Connect Group (CG) dengan tema warm brown.">
+  <title>IB Game Hub</title>
+  <meta name="description" content="IB Game Hub - Portal game icebreaker Connect Group.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; object-src 'none'; base-uri 'self';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -26,34 +26,17 @@
   <div class="ambient-glow glow-2"></div>
 
   <div class="portal-container">
-    <!-- Header & Brand Section -->
+    <!-- Header -->
     <header class="portal-header">
-      <div class="portal-badge">
-        <span>🎮</span>
-        <span>CONNECT GROUP PLATFORM</span>
-      </div>
-      <h1 class="portal-title">CG <span class="highlight">GAME HUB</span></h1>
-      <p class="portal-desc">
-        Kumpulan game interaktif dan icebreaker real-time untuk membangun kedekatan, tawa, dan percakapan bermakna di Connect Group.
-      </p>
+      <h1 class="portal-title">IB <span class="highlight">GAME HUB</span></h1>
     </header>
 
-    <!-- Category / Filter Navigation -->
-    <nav class="filter-bar" aria-label="Kategori Game">
-      <button class="filter-btn active" data-filter="all">Semua Game</button>
-      <button class="filter-btn" data-filter="icebreaker">Icebreaker</button>
-      <button class="filter-btn" data-filter="deeptalk">Deep Talk</button>
-      <button class="filter-btn" data-filter="trivia">Trivia & Tebak</button>
-    </nav>
-
-    <!-- Dynamic Game Cards Grid -->
+    <!-- Game Cards Grid -->
     <main class="games-grid" id="gamesGrid">
-      <!-- Fallback static content rendered automatically via portal.js -->
       <noscript>
         <article class="game-card featured">
           <div class="card-top">
             <div class="card-icon">📦</div>
-            <span class="status-pill ready">Siap Main</span>
           </div>
           <div class="card-content">
             <h2 class="game-title">Anonymous Box</h2>
@@ -62,9 +45,6 @@
               <span class="meta-tag">⏱️ 10-15 Mnt</span>
               <span class="meta-tag">🔒 P2P Anonim</span>
             </div>
-            <p class="game-description">
-              Tulis cerita atau rahasia kecilmu secara anonim ke dalam Box. Tebak siapa penulisnya dan rasakan momen seru bersama teman CG-mu.
-            </p>
           </div>
           <div class="card-actions">
             <a href="anonymous-box.html" class="btn-play">Mainkan Game ➔</a>
@@ -72,11 +52,6 @@
         </article>
       </noscript>
     </main>
-
-    <!-- Portal Footer -->
-    <footer class="portal-footer">
-      <p>Dibuat untuk mempererat persekutuan Connect Group &bull; No login required</p>
-    </footer>
   </div>
 
   <script src="portal.js"></script>
