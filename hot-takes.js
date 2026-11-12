@@ -19,6 +19,7 @@ const ALLOWED_HOST_ACTIONS = new Set([
   'SYNC_ALL_STANCES',
   'START_DEBATE_TIMER',
   'SYNC_REJOIN_STATE',
+  'JOIN_REJECTED',
   'HOST_STOP_GAME',
   'HOST_RESTART_GAME',
   'HOST_TERMINATE_ROOM',
@@ -48,6 +49,7 @@ class HotTakesGame {
     this.stances = {}; // { playerName: number }
     this.debateTimerInterval = null;
     this.debateSecondsLeft = 30;
+    this.debateEndsAt = 0;
     this.isDebateLocked = false;
 
     this.initDOM();
@@ -265,11 +267,13 @@ class HotTakesGame {
       clearInterval(this.debateTimerInterval);
       this.debateTimerInterval = null;
     }
+    this.debateEndsAt = 0;
     this.isDebateLocked = false;
     this.stances = {};
     window.realtimeEngine.broadcast('HOST_STOP_GAME', {});
     this.showScreen('lobby');
     this.updateLobbyUI();
+    this.saveSession();
     this.showToast('Permainan dihentikan. Kembali ke Lobby.');
   }
 
@@ -279,6 +283,7 @@ class HotTakesGame {
       clearInterval(this.debateTimerInterval);
       this.debateTimerInterval = null;
     }
+    this.debateEndsAt = 0;
     this.isDebateLocked = false;
     this.stances = {};
     window.realtimeEngine.broadcast('HOST_RESTART_GAME', {});
@@ -292,33 +297,37 @@ class HotTakesGame {
       clearInterval(this.debateTimerInterval);
       this.debateTimerInterval = null;
     }
+    this.debateEndsAt = 0;
     window.realtimeEngine.broadcast('HOST_TERMINATE_ROOM', {});
     
-    // Clear storage and state
+    // Clear storage and teardown networking
     localStorage.removeItem(RADAR_STORAGE_KEY);
-    window.location.reload();
+    setTimeout(() => {
+      window.realtimeEngine.destroy();
+      window.location.reload();
+    }, 150);
   }
 
   updateSliderLabel(val) {
-    let text = `${val}% — Netral`;
+    let text = `${val}% - Netral`;
     let color = 'var(--color-neutral)';
     if (val === 0) {
-      text = '0% — Mentok Kiri';
+      text = '0% - Mentok Kiri';
       color = 'var(--color-disagree)';
     } else if (val === 100) {
-      text = '100% — Mentok Kanan';
+      text = '100% - Mentok Kanan';
       color = 'var(--color-agree)';
     } else if (val <= 15) {
-      text = `${val}% — Sangat Tidak Setuju!`;
+      text = `${val}% - Sangat Tidak Setuju!`;
       color = 'var(--color-disagree)';
     } else if (val <= 35) {
-      text = `${val}% — Cenderung Tidak Setuju`;
+      text = `${val}% - Cenderung Tidak Setuju`;
       color = 'rgba(244, 63, 94, 0.85)';
     } else if (val >= 85) {
-      text = `${val}% — Sangat Setuju Banget!`;
+      text = `${val}% - Sangat Setuju Banget!`;
       color = 'var(--color-agree)';
     } else if (val >= 65) {
-      text = `${val}% — Cenderung Setuju`;
+      text = `${val}% - Cenderung Setuju`;
       color = 'rgba(16, 185, 129, 0.85)';
     }
 
@@ -400,94 +409,167 @@ class HotTakesGame {
     this.saveSession();
   }
 
-  onPlayerConnected(conn) {
-    const rawName = conn.metadata ? conn.metadata.name : `Pemain ${this.players.length + 1}`;
-    const safeName = sanitizeString(rawName, 15) || `Pemain ${this.players.length + 1}`;
-    const sessionId = (conn.metadata && conn.metadata.sessionId) ? String(conn.metadata.sessionId) : `sess-${safeName}`;
+  // Public roster: never leak sessionId (identity token) or peer ids to clients
+  publicPlayers() {
+    return this.players.map(p => ({ name: p.name, isHost: Boolean(p.isHost), isOffline: Boolean(p.isOffline) }));
+  }
 
-    // Cancel any pending disconnect purge timer for this player
-    if (this.disconnectTimers && this.disconnectTimers[safeName.toLowerCase()]) {
-      clearTimeout(this.disconnectTimers[safeName.toLowerCase()]);
-      delete this.disconnectTimers[safeName.toLowerCase()];
+  normalizePlayers(list) {
+    if (!Array.isArray(list)) return [];
+    return list.slice(0, 30).map(p => ({
+      name: sanitizeString(p && p.name, 15),
+      isHost: Boolean(p && p.isHost),
+      isOffline: Boolean(p && p.isOffline)
+    })).filter(p => p.name);
+  }
+
+  normalizeStances(obj) {
+    const out = {};
+    if (!obj || typeof obj !== 'object') return out;
+    Object.entries(obj).slice(0, 30).forEach(([k, v]) => {
+      const name = sanitizeString(k, 15);
+      const val = parseInt(v, 10);
+      if (name && !isNaN(val)) out[name] = Math.min(100, Math.max(0, val));
+    });
+    return out;
+  }
+
+  rejectConnection(conn, reason) {
+    const packet = { action: 'JOIN_REJECTED', payload: { reason }, msgId: `REJ-${Date.now()}-${Math.random()}` };
+    try { if (conn && typeof conn.send === 'function') conn.send(packet); } catch (e) {}
+    conn.__rejected = true;
+    setTimeout(() => { try { if (conn.close) conn.close(); } catch (e) {} }, 600);
+  }
+
+  buildRejoinState() {
+    const now = Date.now();
+    const secondsLeft = this.isDebateLocked && this.debateEndsAt
+      ? Math.max(0, Math.ceil((this.debateEndsAt - now) / 1000))
+      : 0;
+    return {
+      players: this.publicPlayers(),
+      statementIndex: this.currentStatementIndex,
+      statementText: this.currentStatementText,
+      stances: this.stances,
+      inRound: this.screens.radar.classList.contains('active'),
+      debateLocked: this.isDebateLocked,
+      debateSecondsLeft: secondsLeft
+    };
+  }
+
+  onPlayerConnected(conn) {
+    const rawName = conn.metadata ? conn.metadata.name : '';
+    const safeName = sanitizeString(rawName, 15);
+    if (!safeName) {
+      this.rejectConnection(conn, 'Nama tidak valid.');
+      return;
+    }
+    const sessionId = (conn.metadata && conn.metadata.sessionId)
+      ? String(conn.metadata.sessionId).slice(0, 64)
+      : `sess-${safeName}`;
+    const key = safeName.toLowerCase();
+
+    const bySession = this.players.findIndex(p => p.sessionId && p.sessionId === sessionId);
+    const byName = this.players.findIndex(p => p.name.toLowerCase() === key);
+
+    // Name collision with a different device that is still online (or the host): reject
+    if (byName >= 0 && byName !== bySession) {
+      const other = this.players[byName];
+      if (other.isHost || !other.isOffline) {
+        this.rejectConnection(conn, `Nama "${safeName}" sudah dipakai pemain lain. Gunakan nama lain.`);
+        return;
+      }
     }
 
-    const existingIdx = this.players.findIndex(p => 
-      (p.sessionId && p.sessionId === sessionId) || p.name.toLowerCase() === safeName.toLowerCase()
-    );
+    const existingIdx = bySession >= 0 ? bySession : byName;
+
+    if (existingIdx < 0 && this.players.length >= 24) {
+      this.rejectConnection(conn, 'Room penuh (maksimal 24 pemain).');
+      return;
+    }
+
+    // Cancel pending purge timers for this player
+    if (this.disconnectTimers) {
+      [key, existingIdx >= 0 ? this.players[existingIdx].name.toLowerCase() : null].forEach(k => {
+        if (k && this.disconnectTimers[k]) {
+          clearTimeout(this.disconnectTimers[k]);
+          delete this.disconnectTimers[k];
+        }
+      });
+    }
 
     if (existingIdx >= 0) {
-      this.players[existingIdx].id = conn.peer;
-      this.players[existingIdx].sessionId = sessionId;
-      this.players[existingIdx].name = safeName;
-      this.players[existingIdx].isOffline = false;
-    } else if (this.players.length < 24) {
-      this.players.push({
-        id: conn.peer,
-        sessionId: sessionId,
-        name: safeName,
-        isHost: false,
-        isOffline: false
-      });
+      const p = this.players[existingIdx];
+      // Same device rejoined under a new name: carry stance over
+      if (p.name !== safeName && Object.prototype.hasOwnProperty.call(this.stances, p.name)) {
+        this.stances[safeName] = this.stances[p.name];
+        delete this.stances[p.name];
+      }
+      p.id = (conn.peer && !String(conn.peer).startsWith('local-')) ? conn.peer : (p.id || conn.peer);
+      p.sessionId = sessionId;
+      p.name = safeName;
+      p.isOffline = false;
+    } else {
+      this.players.push({ id: conn.peer, sessionId, name: safeName, isHost: false, isOffline: false });
     }
 
     this.updateLobbyUI();
-    window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
+    window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.publicPlayers() });
 
-    // If client connects mid-game, synchronize current statement and stances
-    if (this.mode === 'HOST' && this.screens.radar.classList.contains('active')) {
-      window.realtimeEngine.sendDirectToClient(safeName, 'SYNC_REJOIN_STATE', {
-        players: this.players,
-        statementIndex: this.currentStatementIndex,
-        statementText: this.currentStatementText,
-        stances: this.stances,
-        inRound: true
-      });
-    }
+    // Always push full state to the (re)joining client
+    window.realtimeEngine.sendDirectToClient(safeName, 'SYNC_REJOIN_STATE', this.buildRejoinState());
 
     this.saveSession();
   }
 
+  schedulePurge(name, ms) {
+    if (!this.disconnectTimers) this.disconnectTimers = {};
+    const key = name.toLowerCase();
+    clearTimeout(this.disconnectTimers[key]);
+    this.disconnectTimers[key] = setTimeout(() => {
+      delete this.disconnectTimers[key];
+      const curIdx = this.players.findIndex(p => p.name.toLowerCase() === key);
+      if (curIdx >= 0 && this.players[curIdx].isOffline && !this.players[curIdx].isHost) {
+        const realName = this.players[curIdx].name;
+        this.players.splice(curIdx, 1);
+        delete this.stances[realName];
+        this.showToast(`${realName} keluar dari room.`);
+        this.updateLobbyUI();
+        window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.publicPlayers() });
+        window.realtimeEngine.broadcast('SYNC_ALL_STANCES', { stances: this.stances });
+        if (this.screens.radar.classList.contains('active')) this.renderSpectrumPins(this.stances);
+        this.saveSession();
+      }
+    }, ms);
+  }
+
   onPlayerDisconnected(conn) {
-    const discName = conn && conn.metadata ? conn.metadata.name : null;
+    if (!conn || conn.__rejected) return;
+    const discName = conn.metadata ? sanitizeString(conn.metadata.name, 15) : '';
     if (!discName) return;
 
-    if (!this.disconnectTimers) this.disconnectTimers = {};
-
     const idx = this.players.findIndex(p => p.name.toLowerCase() === discName.toLowerCase());
-    if (idx >= 0 && !this.players[idx].isHost) {
-      // Mark as temporarily offline instead of deleting immediately
-      this.players[idx].isOffline = true;
-      this.updateLobbyUI();
-      window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
+    if (idx < 0 || this.players[idx].isHost) return;
 
-      // Grace period: allow 35 seconds to reconnect before purging
-      if (this.disconnectTimers[discName.toLowerCase()]) {
-        clearTimeout(this.disconnectTimers[discName.toLowerCase()]);
-      }
+    // Stale close from a superseded connection: player already reconnected on a new peer
+    const p = this.players[idx];
+    if (p.id && conn.peer && !String(conn.peer).startsWith('local-') && p.id !== conn.peer) return;
 
-      this.disconnectTimers[discName.toLowerCase()] = setTimeout(() => {
-        const curIdx = this.players.findIndex(p => p.name.toLowerCase() === discName.toLowerCase());
-        if (curIdx >= 0 && this.players[curIdx].isOffline) {
-          this.players.splice(curIdx, 1);
-          delete this.stances[discName];
-          this.showToast(`${discName} keluar dari room.`);
-          this.updateLobbyUI();
-          window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
-          window.realtimeEngine.broadcast('SYNC_ALL_STANCES', { stances: this.stances });
-          this.renderSpectrumPins(this.stances);
-        }
-        delete this.disconnectTimers[discName.toLowerCase()];
-      }, 35000);
-    }
+    p.isOffline = true;
+    this.updateLobbyUI();
+    window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.publicPlayers() });
+    this.schedulePurge(p.name, 35000);
   }
 
   updateLobbyUI() {
-    this.connectedCount.textContent = this.players.length;
+    const onlineCount = this.players.filter(p => !p.isOffline).length;
+    this.connectedCount.textContent = onlineCount;
     this.playerListContainer.innerHTML = '';
 
+    const frag = document.createDocumentFragment ? document.createDocumentFragment() : this.playerListContainer;
     this.players.forEach(p => {
       const chip = document.createElement('div');
-      chip.className = 'player-chip';
+      chip.className = p.isOffline ? 'player-chip is-offline' : 'player-chip';
       if (p.isHost) {
         const hostTag = document.createElement('span');
         hostTag.className = 'host-tag';
@@ -495,11 +577,12 @@ class HotTakesGame {
         chip.appendChild(hostTag);
       }
       chip.appendChild(document.createTextNode(p.name));
-      this.playerListContainer.appendChild(chip);
+      frag.appendChild(chip);
     });
+    if (frag !== this.playerListContainer) this.playerListContainer.appendChild(frag);
 
     if (this.mode === 'HOST') {
-      const canStart = this.players.length >= 2;
+      const canStart = onlineCount >= 2;
       this.btnStartGame.style.display = 'inline-flex';
       this.btnStartGame.disabled = !canStart;
       this.btnStartGame.textContent = canStart ? 'Mulai Hot Takes Radar' : 'Butuh Minimal 2 Pemain';
@@ -525,6 +608,7 @@ class HotTakesGame {
     });
 
     this.setupLocalStatement(this.currentStatementIndex, this.currentStatementText);
+    this.saveSession();
   }
 
   setupLocalStatement(index, text) {
@@ -532,6 +616,7 @@ class HotTakesGame {
       clearInterval(this.debateTimerInterval);
       this.debateTimerInterval = null;
     }
+    this.debateEndsAt = 0;
     this.debateSecondsLeft = 30;
     this.debateTimerDisplay.textContent = '30s';
     this.debateTimerDisplay.classList.remove('critical');
@@ -596,6 +681,7 @@ class HotTakesGame {
     });
 
     this.renderSpectrumPins(this.stances);
+    this.saveSession();
   }
 
   renderSpectrumPins(stances) {
@@ -691,8 +777,13 @@ class HotTakesGame {
   runDebateCountdown(seconds = 30) {
     if (this.debateTimerInterval) clearInterval(this.debateTimerInterval);
     this.debateSecondsLeft = seconds;
+    this.debateEndsAt = Date.now() + seconds * 1000;
     this.debateTimerDisplay.textContent = `${this.debateSecondsLeft}s`;
-    this.debateTimerDisplay.classList.remove('critical');
+    if (this.debateSecondsLeft <= 10 && this.debateSecondsLeft > 0) {
+      this.debateTimerDisplay.classList.add('critical');
+    } else {
+      this.debateTimerDisplay.classList.remove('critical');
+    }
 
     // Lock stance changes across all players when debate timer starts
     this.isDebateLocked = true;
@@ -703,10 +794,19 @@ class HotTakesGame {
       this.btnStartDebateTimer.disabled = true;
     }
 
+    if (seconds <= 0) {
+      this.debateEndsAt = 0;
+      this.debateTimerDisplay.textContent = '0s';
+      this.debateTimerDisplay.classList.remove('critical');
+      return;
+    }
+
     this.debateTimerInterval = setInterval(() => {
       this.debateSecondsLeft--;
       if (this.debateSecondsLeft <= 0) {
         clearInterval(this.debateTimerInterval);
+        this.debateTimerInterval = null;
+        this.debateEndsAt = 0;
         this.debateTimerDisplay.textContent = '0s';
         this.debateTimerDisplay.classList.remove('critical');
         this.showToast('Waktu adu argumen 30 detik selesai!');
@@ -731,13 +831,17 @@ class HotTakesGame {
     if (this.mode === 'CLIENT' && !ALLOWED_HOST_ACTIONS.has(action)) return;
 
     switch (action) {
+      case 'JOIN_REJECTED':
+        window.realtimeEngine.clearActiveSession();
+        window.realtimeEngine.destroy();
+        this.topMeta.style.display = 'none';
+        this.showScreen('welcome');
+        this.showToast((payload && payload.reason) ? payload.reason : 'Tidak dapat bergabung ke room.');
+        break;
+
       case 'SYNC_PLAYERS':
         if (payload && Array.isArray(payload.players)) {
-          this.players = payload.players.map(p => ({
-            id: String(p.id || '').slice(0, 32),
-            name: sanitizeString(p.name, 15),
-            isHost: Boolean(p.isHost)
-          }));
+          this.players = this.normalizePlayers(payload.players);
           this.updateLobbyUI();
         }
         break;
@@ -746,13 +850,7 @@ class HotTakesGame {
         if (this.mode === 'HOST' && payload) {
           const safeName = sanitizeString(payload.name, 15);
           if (safeName) {
-            window.realtimeEngine.sendDirectToClient(safeName, 'SYNC_REJOIN_STATE', {
-              players: this.players,
-              statementIndex: this.currentStatementIndex,
-              statementText: this.currentStatementText,
-              stances: this.stances,
-              inRound: this.screens.radar.classList.contains('active')
-            });
+            window.realtimeEngine.sendDirectToClient(safeName, 'SYNC_REJOIN_STATE', this.buildRejoinState());
           }
         }
         break;
@@ -760,21 +858,34 @@ class HotTakesGame {
       case 'SYNC_REJOIN_STATE':
         if (payload) {
           if (payload.players) {
-            this.players = payload.players;
+            this.players = this.normalizePlayers(payload.players);
             this.updateLobbyUI();
           }
           if (payload.inRound && payload.statementText) {
-            this.setupLocalStatement(payload.statementIndex, payload.statementText);
+            this.setupLocalStatement(payload.statementIndex || 0, payload.statementText);
             if (payload.stances) {
-              this.stances = payload.stances;
+              this.stances = this.normalizeStances(payload.stances);
               this.renderSpectrumPins(this.stances);
+              if (Object.prototype.hasOwnProperty.call(this.stances, this.playerName)) {
+                const ownVal = this.stances[this.playerName];
+                this.myStance = ownVal;
+                this.sliderRange.value = ownVal;
+                this.updateSliderLabel(ownVal);
+                this.btnLockStance.textContent = 'Perbarui Posisi';
+              }
             }
+            if (payload.debateLocked) {
+              this.runDebateCountdown(payload.debateSecondsLeft || 0);
+            }
+          } else {
+            this.showScreen('lobby');
           }
         }
         break;
 
       case 'SYNC_STATEMENT':
         if (payload && typeof payload.statementText === 'string') {
+          this.stances = {};
           this.setupLocalStatement(payload.statementIndex || 0, payload.statementText);
         }
         break;
@@ -791,13 +902,13 @@ class HotTakesGame {
 
       case 'SYNC_ALL_STANCES':
         if (payload && payload.stances) {
-          this.stances = payload.stances;
+          this.stances = this.normalizeStances(payload.stances);
           this.renderSpectrumPins(this.stances);
         }
         break;
 
       case 'START_DEBATE_TIMER':
-        this.runDebateCountdown(payload.seconds || 30);
+        this.runDebateCountdown((payload && payload.seconds) || 30);
         break;
 
       case 'HOST_STOP_GAME':
@@ -805,6 +916,7 @@ class HotTakesGame {
           clearInterval(this.debateTimerInterval);
           this.debateTimerInterval = null;
         }
+        this.debateEndsAt = 0;
         this.isDebateLocked = false;
         this.stances = {};
         this.showScreen('lobby');
@@ -817,6 +929,7 @@ class HotTakesGame {
           clearInterval(this.debateTimerInterval);
           this.debateTimerInterval = null;
         }
+        this.debateEndsAt = 0;
         this.isDebateLocked = false;
         this.stances = {};
         this.showToast('Host me-restart permainan dari awal.');
@@ -827,7 +940,9 @@ class HotTakesGame {
           clearInterval(this.debateTimerInterval);
           this.debateTimerInterval = null;
         }
+        this.debateEndsAt = 0;
         localStorage.removeItem(RADAR_STORAGE_KEY);
+        window.realtimeEngine.destroy();
         this.showToast('Room telah dibubarkan oleh Host.');
         setTimeout(() => {
           window.location.reload();
@@ -842,6 +957,11 @@ class HotTakesGame {
       mode: this.mode,
       playerName: this.playerName,
       roomCode: this.roomCode,
+      inRound: this.screens.radar ? this.screens.radar.classList.contains('active') : false,
+      currentStatementIndex: this.currentStatementIndex,
+      currentStatementText: this.currentStatementText,
+      stances: this.stances,
+      players: this.publicPlayers(),
       timestamp: Date.now()
     }));
   }
@@ -858,11 +978,50 @@ class HotTakesGame {
       if (data.playerName) this.playerNameInput.value = data.playerName;
       if (data.roomCode) this.joinCodeInput.value = data.roomCode;
 
-      // Auto-reconnect if client disconnected and reloads page
       if (data.mode === 'CLIENT' && data.playerName && data.roomCode) {
-        console.log('[HotTakes] Auto-reconnecting client to session:', data.roomCode);
         setTimeout(() => {
           this.handleJoinRoom();
+        }, 300);
+      } else if (data.mode === 'HOST' && data.playerName && data.roomCode) {
+        setTimeout(() => {
+          this.playerName = sanitizeString(data.playerName, 15);
+          this.mode = 'HOST';
+          this.roomCode = window.realtimeEngine.initHost(
+            data.roomCode,
+            (conn) => this.onPlayerConnected(conn),
+            (d, conn) => this.onMessageReceived(d, conn),
+            (conn) => this.onPlayerDisconnected(conn),
+            'TAKE'
+          );
+          const restoredPlayers = this.normalizePlayers(data.players || []).map(p => ({
+            ...p,
+            isOffline: !p.isHost
+          }));
+          if (!restoredPlayers.some(p => p.isHost)) {
+            restoredPlayers.unshift({ id: 'host', name: this.playerName, isHost: true, isOffline: false });
+          }
+          this.players = restoredPlayers;
+          this.displayRoomCode.textContent = this.roomCode;
+          this.lobbyCodeBadge.textContent = this.roomCode;
+          this.topMeta.style.display = 'flex';
+          if (this.hostMenuContainer) {
+            this.hostMenuContainer.style.display = 'flex';
+          }
+          this.updateLobbyUI();
+          if (data.inRound && data.currentStatementText) {
+            this.setupLocalStatement(data.currentStatementIndex || 0, data.currentStatementText);
+            this.stances = this.normalizeStances(data.stances || {});
+            this.renderSpectrumPins(this.stances);
+            if (Object.prototype.hasOwnProperty.call(this.stances, this.playerName)) {
+              const ownVal = this.stances[this.playerName];
+              this.myStance = ownVal;
+              this.sliderRange.value = ownVal;
+              this.updateSliderLabel(ownVal);
+              this.btnLockStance.textContent = 'Perbarui Posisi';
+            }
+          } else {
+            this.showScreen('lobby');
+          }
         }, 300);
       }
     } catch (e) {

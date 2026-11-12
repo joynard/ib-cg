@@ -27,23 +27,62 @@ class RealtimeEngine {
     // Reconnection tracking
     this.hasConnectedOnce = false;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
+    this.maxReconnectAttempts = 12; // ~36s window, covers host page reload
+    this.reconnectTimer = null;
+    this.isDestroyed = false;
 
     // Deduplication Set for multi-channel packets
     this.processedMsgIds = new Set();
   }
 
-  // Persistent Client Session ID across tab refreshes
+  // Single-flight reconnect scheduler (prevents duplicate parallel attempts)
+  scheduleReconnect(playerName) {
+    if (this.isDestroyed || this.reconnectTimer) return;
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.showErrorToast('Koneksi ke Host terputus.');
+      if (this.onDisconnectCallback) this.onDisconnectCallback(new Error('closed'));
+      return;
+    }
+    this.reconnectAttempts++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.isDestroyed) return;
+      if (!this.hostConnection || !this.hostConnection.open) {
+        this.connectToHost(playerName, null);
+      }
+    }, 3000);
+  }
+
+  // Full teardown: stops reconnects, closes channels
+  destroy() {
+    this.isDestroyed = true;
+    clearTimeout(this.reconnectTimer);
+    clearTimeout(this.connectTimeout);
+    clearInterval(this.heartbeatInterval);
+    this.reconnectTimer = null;
+    try { this.connections.forEach(c => c.close && c.close()); } catch (e) {}
+    this.connections = [];
+    try { if (this.hostConnection) this.hostConnection.close(); } catch (e) {}
+    try { if (this.peer) this.peer.destroy(); } catch (e) {}
+    try { if (this.broadcastChannel) this.broadcastChannel.close(); } catch (e) {}
+    this.peer = null;
+    this.broadcastChannel = null;
+  }
+
+  // Per-tab client identity: survives reload (sessionStorage) but is unique per tab,
+  // so multiple tabs on the same browser are distinct players.
   getClientSessionId() {
     try {
-      let id = localStorage.getItem('CG_CLIENT_SESSION_ID');
+      let id = sessionStorage.getItem('CG_CLIENT_SESSION_ID');
       if (!id) {
-        id = 'cli_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
-        localStorage.setItem('CG_CLIENT_SESSION_ID', id);
+        const rnd = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
+        id = 'cli_' + rnd;
+        sessionStorage.setItem('CG_CLIENT_SESSION_ID', id);
       }
       return id;
     } catch (e) {
-      return 'cli_ephemeral_' + Math.random().toString(36).substring(2, 10);
+      if (!this._ephemeralId) this._ephemeralId = 'cli_eph_' + Math.random().toString(36).slice(2, 12);
+      return this._ephemeralId;
     }
   }
 
@@ -111,6 +150,7 @@ class RealtimeEngine {
   // Initialize Host Room
   initHost(roomCode, onPlayerConnect, onMessage, onPlayerDisconnect, codePrefix = 'BOX') {
     this.isHost = true;
+    this.isDestroyed = false;
     this.codePrefix = codePrefix;
     const rawCode = roomCode || this.generateRoomCode(codePrefix);
     this.roomCode = rawCode.replace(/[^A-Z0-9-]/gi, '').toUpperCase().slice(0, 12);
@@ -173,8 +213,18 @@ class RealtimeEngine {
         });
       });
 
+      // Signaling server dropped (mobile network blip): re-register same ID
+      this.peer.on('disconnected', () => {
+        if (this.isDestroyed) return;
+        setTimeout(() => {
+          try { if (this.peer && !this.peer.destroyed) this.peer.reconnect(); } catch (e) {}
+        }, 1500);
+      });
+
       this.peer.on('error', (err) => {
+        if (this.isDestroyed) return;
         if (err.type === 'unavailable-id') {
+          // Previous host tab still holds the ID (e.g. after reload); retry until released
           setTimeout(() => {
             this.initHost(this.roomCode, this.onPlayerConnectCallback, this.onMessageCallback, this.onPlayerDisconnectCallback, this.codePrefix);
           }, 1500);
@@ -198,6 +248,9 @@ class RealtimeEngine {
     this.onDisconnectCallback = onDisconnect;
     this.hasConnectedOnce = false;
     this.reconnectAttempts = 0;
+    this.isDestroyed = false;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
 
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
     this.connectTimeout = setTimeout(() => {
@@ -228,28 +281,32 @@ class RealtimeEngine {
         this.connectToHost(playerName, onConnected);
       });
 
+      this.peer.on('disconnected', () => {
+        if (this.isDestroyed) return;
+        setTimeout(() => {
+          try { if (this.peer && !this.peer.destroyed) this.peer.reconnect(); } catch (e) {}
+        }, 1500);
+      });
+
       this.peer.on('error', (err) => {
-        if (err.type === 'peer-unavailable') {
+        if (this.isDestroyed) return;
+        // Room never reached on first attempt: invalid code / host offline
+        if (err.type === 'peer-unavailable' && !this.hasConnectedOnce) {
           if (this.connectTimeout) clearTimeout(this.connectTimeout);
           this.showErrorToast(`Kode Room "${this.roomCode}" tidak ditemukan atau Host sudah offline.`);
           this.clearActiveSession();
           if (this.onDisconnectCallback) this.onDisconnectCallback(err);
           return;
         }
-
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          this.reconnectAttempts++;
-          setTimeout(() => {
-            if (!this.hostConnection || !this.hostConnection.open) {
-              this.connectToHost(playerName, null);
-            }
-          }, 2000);
-        } else {
-          if (this.connectTimeout) clearTimeout(this.connectTimeout);
-          this.showErrorToast(`Gagal terhubung ke room "${this.roomCode}".`);
-          this.clearActiveSession();
-          if (this.onDisconnectCallback) this.onDisconnectCallback(err);
+        // Previously connected: host may be reloading, keep retrying within window
+        if (this.hasConnectedOnce) {
+          this.scheduleReconnect(playerName);
+          return;
         }
+        if (this.connectTimeout) clearTimeout(this.connectTimeout);
+        this.showErrorToast(`Gagal terhubung ke room "${this.roomCode}".`);
+        this.clearActiveSession();
+        if (this.onDisconnectCallback) this.onDisconnectCallback(err);
       });
     } catch (e) {
       console.warn('[Realtime] PeerJS Client fallback warning:', e);
@@ -368,14 +425,11 @@ class RealtimeEngine {
       }
     });
 
+    const thisConn = this.hostConnection;
     this.hostConnection.on('close', () => {
-      if (this.hasConnectedOnce && this.reconnectAttempts < this.maxReconnectAttempts) {
-        this.reconnectAttempts++;
-        setTimeout(() => this.connectToHost(playerName, null), 2000);
-      } else if (this.hasConnectedOnce) {
-        this.showErrorToast('Koneksi ke Host terputus.');
-        if (this.onDisconnectCallback) this.onDisconnectCallback(new Error('closed'));
-      }
+      // Ignore close events from superseded connections
+      if (thisConn !== this.hostConnection) return;
+      if (this.hasConnectedOnce) this.scheduleReconnect(playerName);
     });
 
     this.hostConnection.on('error', (err) => {

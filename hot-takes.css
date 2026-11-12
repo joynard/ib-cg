@@ -300,6 +300,11 @@ body {
   color: var(--text-cream);
 }
 
+.player-chip.is-offline {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
 .player-chip .host-tag {
   font-size: 0.62rem;
   background: var(--accent-blue);
