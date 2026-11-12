@@ -21,7 +21,7 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
-  <link rel="stylesheet" href="hot-takes.css">
+  <link rel="stylesheet" href="hot-takes.css?v=3">
 </head>
 <body>
   <div class="ambient-glow glow-top"></div>
@@ -29,9 +29,9 @@
   <div class="app-container">
     <!-- Top Bar -->
     <header class="top-bar">
-      <h1 class="brand-title">HOT TAKES <span class="highlight">RADAR</span></h1>
+      <h1 class="brand-title">HOT TAKES <span class="brand-radar">RADAR</span></h1>
       <div class="top-meta" id="topMeta" style="display: none;">
-        <span class="room-pill">ROOM: <strong id="displayRoomCode">RADAR-XXXX</strong></span>
+        <span class="room-pill">ROOM: <strong id="displayRoomCode">TAKE-XXXX</strong></span>
       </div>
     </header>
 
@@ -44,14 +44,16 @@
             <input type="text" id="playerNameInput" placeholder="Contoh: Samuel" maxlength="15" autocomplete="off">
           </div>
 
-          <div class="action-stack">
-            <button class="btn btn-primary" id="btnCreateRoom">Buat Room Baru (Host)</button>
-            <div class="join-divider"><span>ATAU GABUNG ROOM</span></div>
-            <div class="join-group">
-              <input type="text" id="joinCodeInput" placeholder="KODE ROOM" maxlength="10">
-              <button class="btn btn-secondary" id="btnJoinRoom">Gabung</button>
-            </div>
+          <button class="btn btn-primary" id="btnCreateRoom">Buat Room Baru (Host)</button>
+
+          <div class="join-divider"><span>ATAU GABUNG ROOM</span></div>
+
+          <div class="form-group">
+            <label for="joinCodeInput">Kode Room</label>
+            <input type="text" id="joinCodeInput" placeholder="Contoh: TAKE-8492 atau 8492" maxlength="12" autocomplete="off">
           </div>
+
+          <button class="btn btn-secondary" id="btnJoinRoom">Gabung ke Room</button>
         </div>
       </section>
 
