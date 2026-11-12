@@ -87,6 +87,92 @@ body {
   text-align: center;
 }
 
+/* Host Menu Quick Actions (Left side of Header) */
+.host-menu-container {
+  position: absolute;
+  left: 1rem;
+  display: flex;
+  align-items: center;
+  z-index: 50;
+}
+
+.btn-host-menu {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-card);
+  color: var(--text-cream);
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: all 0.2s ease;
+}
+
+.btn-host-menu:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: var(--accent-blue);
+  color: #ffffff;
+}
+
+.host-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 230px;
+  background: rgba(15, 22, 32, 0.98);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 0.4rem;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+  display: none;
+  flex-direction: column;
+  gap: 0.2rem;
+  z-index: 100;
+  text-align: left;
+}
+
+.host-menu-dropdown.show {
+  display: flex;
+  animation: fadeIn 0.15s ease forwards;
+}
+
+.host-menu-item {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-cream);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.host-menu-item:hover {
+  background: rgba(56, 189, 248, 0.12);
+  color: #ffffff;
+}
+
+.host-menu-item.danger {
+  color: #f43f5e;
+}
+
+.host-menu-item.danger:hover {
+  background: rgba(244, 63, 94, 0.15);
+  color: #ff6b81;
+}
+
+.host-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0.2rem 0;
+}
+
 .brand-title {
   font-family: 'Outfit', sans-serif;
   font-size: 1.25rem;
@@ -780,4 +866,56 @@ body {
 .btn-lock-stance:hover:not(:disabled) {
   background: linear-gradient(135deg, #38bdf8, #0284c7);
   transform: translateY(-2px);
+}
+
+/* Modal Overlay for Confirmation */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(4, 7, 12, 0.82);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  padding: 2rem 1.6rem;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.7);
+}
+
+.modal-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-white);
+  margin-bottom: 0.6rem;
+}
+
+.modal-body {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+.modal-actions-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.modal-actions-row .btn {
+  flex: 1;
+  height: 44px;
 }

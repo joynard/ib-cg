@@ -19,7 +19,9 @@ const ALLOWED_HOST_ACTIONS = new Set([
   'SYNC_ALL_STANCES',
   'START_DEBATE_TIMER',
   'SYNC_REJOIN_STATE',
+  'HOST_STOP_GAME',
   'HOST_RESTART_GAME',
+  'HOST_TERMINATE_ROOM',
   'PING'
 ]);
 
@@ -98,6 +100,22 @@ class HotTakesGame {
 
     // Toast
     this.toastNotification = document.getElementById('toastNotification');
+
+    // Host Quick Menu DOM
+    this.hostMenuContainer = document.getElementById('hostMenuContainer');
+    this.btnHostMenu = document.getElementById('btnHostMenu');
+    this.hostMenuDropdown = document.getElementById('hostMenuDropdown');
+    this.btnMenuStopGame = document.getElementById('btnMenuStopGame');
+    this.btnMenuRestartGame = document.getElementById('btnMenuRestartGame');
+    this.btnMenuTerminateRoom = document.getElementById('btnMenuTerminateRoom');
+
+    // Confirm Modal
+    this.confirmModal = document.getElementById('confirmModal');
+    this.confirmModalTitle = document.getElementById('confirmModalTitle');
+    this.confirmModalBody = document.getElementById('confirmModalBody');
+    this.btnConfirmCancel = document.getElementById('btnConfirmCancel');
+    this.btnConfirmOk = document.getElementById('btnConfirmOk');
+    this.pendingConfirmAction = null;
   }
 
   bindEvents() {
@@ -141,6 +159,74 @@ class HotTakesGame {
       const nextIdx = (this.currentStatementIndex + 1) % HOT_TAKES_STATEMENTS.length;
       this.startStatementRound(nextIdx);
     });
+
+    // Host Menu Toggle
+    if (this.btnHostMenu && this.hostMenuDropdown) {
+      this.btnHostMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.hostMenuDropdown.classList.toggle('show');
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!this.hostMenuContainer.contains(e.target)) {
+          this.hostMenuDropdown.classList.remove('show');
+        }
+      });
+    }
+
+    // Host Menu Action 1: Stop Game (Return to Room / Lobby)
+    if (this.btnMenuStopGame) {
+      this.btnMenuStopGame.addEventListener('click', () => {
+        this.hostMenuDropdown.classList.remove('show');
+        this.promptConfirm(
+          'Stop Game',
+          'Hentikan permainan saat ini dan bawa seluruh pemain kembali ke Room (Lobby)?',
+          () => this.executeStopGame()
+        );
+      });
+    }
+
+    // Host Menu Action 2: Restart Game
+    if (this.btnMenuRestartGame) {
+      this.btnMenuRestartGame.addEventListener('click', () => {
+        this.hostMenuDropdown.classList.remove('show');
+        this.promptConfirm(
+          'Restart Game',
+          'Mulai ulang game dari pernyataan #1? Semua posisi pandangan saat ini akan di-reset.',
+          () => this.executeRestartGame()
+        );
+      });
+    }
+
+    // Host Menu Action 3: Terminate Room
+    if (this.btnMenuTerminateRoom) {
+      this.btnMenuTerminateRoom.addEventListener('click', () => {
+        this.hostMenuDropdown.classList.remove('show');
+        this.promptConfirm(
+          'Terminate Room',
+          'PERINGATAN: Room akan dihapus permanen dan semua pemain akan dikeluarkan ke halaman awal.',
+          () => this.executeTerminateRoom()
+        );
+      });
+    }
+
+    // Confirm Modal Events
+    if (this.btnConfirmCancel && this.confirmModal) {
+      this.btnConfirmCancel.addEventListener('click', () => {
+        this.confirmModal.style.display = 'none';
+        this.pendingConfirmAction = null;
+      });
+    }
+
+    if (this.btnConfirmOk) {
+      this.btnConfirmOk.addEventListener('click', () => {
+        this.confirmModal.style.display = 'none';
+        if (typeof this.pendingConfirmAction === 'function') {
+          this.pendingConfirmAction();
+        }
+        this.pendingConfirmAction = null;
+      });
+    }
   }
 
   showScreen(screenKey) {
@@ -158,6 +244,59 @@ class HotTakesGame {
     this.toastTimeout = setTimeout(() => {
       this.toastNotification.classList.remove('show');
     }, duration);
+  }
+
+  promptConfirm(title, message, onOk) {
+    if (!this.confirmModal) {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        onOk();
+      }
+      return;
+    }
+    this.confirmModalTitle.textContent = title;
+    this.confirmModalBody.textContent = message;
+    this.pendingConfirmAction = onOk;
+    this.confirmModal.style.display = 'flex';
+  }
+
+  executeStopGame() {
+    if (this.mode !== 'HOST') return;
+    if (this.debateTimerInterval) {
+      clearInterval(this.debateTimerInterval);
+      this.debateTimerInterval = null;
+    }
+    this.isDebateLocked = false;
+    this.stances = {};
+    window.realtimeEngine.broadcast('HOST_STOP_GAME', {});
+    this.showScreen('lobby');
+    this.updateLobbyUI();
+    this.showToast('Permainan dihentikan. Kembali ke Lobby.');
+  }
+
+  executeRestartGame() {
+    if (this.mode !== 'HOST') return;
+    if (this.debateTimerInterval) {
+      clearInterval(this.debateTimerInterval);
+      this.debateTimerInterval = null;
+    }
+    this.isDebateLocked = false;
+    this.stances = {};
+    window.realtimeEngine.broadcast('HOST_RESTART_GAME', {});
+    this.startStatementRound(0);
+    this.showToast('Permainan berhasil di-restart dari awal.');
+  }
+
+  executeTerminateRoom() {
+    if (this.mode !== 'HOST') return;
+    if (this.debateTimerInterval) {
+      clearInterval(this.debateTimerInterval);
+      this.debateTimerInterval = null;
+    }
+    window.realtimeEngine.broadcast('HOST_TERMINATE_ROOM', {});
+    
+    // Clear storage and state
+    localStorage.removeItem(RADAR_STORAGE_KEY);
+    window.location.reload();
   }
 
   updateSliderLabel(val) {
@@ -210,6 +349,9 @@ class HotTakesGame {
     this.displayRoomCode.textContent = this.roomCode;
     this.lobbyCodeBadge.textContent = this.roomCode;
     this.topMeta.style.display = 'flex';
+    if (this.hostMenuContainer) {
+      this.hostMenuContainer.style.display = 'flex';
+    }
 
     this.updateLobbyUI();
     this.showScreen('lobby');
@@ -242,6 +384,9 @@ class HotTakesGame {
         this.displayRoomCode.textContent = this.roomCode;
         this.lobbyCodeBadge.textContent = this.roomCode;
         this.topMeta.style.display = 'flex';
+        if (this.hostMenuContainer) {
+          this.hostMenuContainer.style.display = 'none';
+        }
         this.showScreen('lobby');
       },
       (data) => this.onMessageReceived(data),
@@ -637,6 +782,40 @@ class HotTakesGame {
 
       case 'START_DEBATE_TIMER':
         this.runDebateCountdown(payload.seconds || 30);
+        break;
+
+      case 'HOST_STOP_GAME':
+        if (this.debateTimerInterval) {
+          clearInterval(this.debateTimerInterval);
+          this.debateTimerInterval = null;
+        }
+        this.isDebateLocked = false;
+        this.stances = {};
+        this.showScreen('lobby');
+        this.updateLobbyUI();
+        this.showToast('Host menghentikan permainan. Kembali ke Lobby.');
+        break;
+
+      case 'HOST_RESTART_GAME':
+        if (this.debateTimerInterval) {
+          clearInterval(this.debateTimerInterval);
+          this.debateTimerInterval = null;
+        }
+        this.isDebateLocked = false;
+        this.stances = {};
+        this.showToast('Host me-restart permainan dari awal.');
+        break;
+
+      case 'HOST_TERMINATE_ROOM':
+        if (this.debateTimerInterval) {
+          clearInterval(this.debateTimerInterval);
+          this.debateTimerInterval = null;
+        }
+        localStorage.removeItem(RADAR_STORAGE_KEY);
+        this.showToast('Room telah dibubarkan oleh Host.');
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
         break;
     }
   }

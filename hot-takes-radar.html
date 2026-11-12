@@ -21,7 +21,7 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
-  <link rel="stylesheet" href="hot-takes.css?v=5">
+  <link rel="stylesheet" href="hot-takes.css?v=6">
 </head>
 <body>
   <div class="ambient-glow glow-top"></div>
@@ -29,6 +29,17 @@
   <div class="app-container">
     <!-- Top Bar -->
     <header class="top-bar">
+      <!-- Host Quick Actions Menu (Left side) -->
+      <div class="host-menu-container" id="hostMenuContainer" style="display: none;">
+        <button class="btn-host-menu" id="btnHostMenu" type="button" aria-label="Menu Host">Menu</button>
+        <div class="host-menu-dropdown" id="hostMenuDropdown">
+          <button class="host-menu-item" id="btnMenuStopGame" type="button">Stop Game (Kembali ke Room)</button>
+          <button class="host-menu-item" id="btnMenuRestartGame" type="button">Restart Game (Mulai Ulang)</button>
+          <div class="host-menu-divider"></div>
+          <button class="host-menu-item danger" id="btnMenuTerminateRoom" type="button">Terminate (Hapus Room)</button>
+        </div>
+      </div>
+
       <h1 class="brand-title">HOT TAKES <span class="brand-radar">RADAR</span></h1>
       <div class="top-meta" id="topMeta" style="display: none;">
         <span class="room-pill">ROOM: <strong id="displayRoomCode">TAKE-XXXX</strong></span>
@@ -137,6 +148,18 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Modal Konfirmasi Host Menu -->
+  <div id="confirmModal" class="modal-overlay" role="dialog" aria-modal="true" style="display: none;">
+    <div class="modal-card">
+      <h3 class="modal-title" id="confirmModalTitle">Konfirmasi</h3>
+      <p class="modal-body" id="confirmModalBody">Apakah Anda yakin ingin melakukan aksi ini?</p>
+      <div class="modal-actions-row">
+        <button class="btn btn-secondary" id="btnConfirmCancel" type="button">Batal</button>
+        <button class="btn btn-primary" id="btnConfirmOk" type="button">Lanjutkan</button>
+      </div>
+    </div>
   </div>
 
   <div id="toastNotification" class="toast-popup" aria-live="polite"></div>
