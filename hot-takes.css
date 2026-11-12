@@ -635,6 +635,24 @@ body {
   color: var(--text-subtle);
 }
 
+.consensus-notice {
+  padding: 0.6rem 0.4rem 0.2rem;
+}
+
+.consensus-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-white);
+  margin-bottom: 0.35rem;
+}
+
+.consensus-desc {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 /* Circular Tension Timer */
 .timer-wrapper {
   display: flex;

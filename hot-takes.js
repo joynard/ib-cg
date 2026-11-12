@@ -91,6 +91,11 @@ class HotTakesGame {
 
     // Showdown Box
     this.showdownBox = document.getElementById('showdownBox');
+    this.showdownBadge = document.getElementById('showdownBadge');
+    this.showdownVersusContent = document.getElementById('showdownVersusContent');
+    this.consensusNotice = document.getElementById('consensusNotice');
+    this.consensusTitle = document.getElementById('consensusTitle');
+    this.consensusDesc = document.getElementById('consensusDesc');
     this.fighterDisagreeName = document.getElementById('fighterDisagreeName');
     this.fighterAgreeName = document.getElementById('fighterAgreeName');
     this.fighterDisagreeVal = document.getElementById('fighterDisagreeVal');
@@ -760,18 +765,58 @@ class HotTakesGame {
     const sorted = [...entries].sort((a, b) => a[1] - b[1]);
     const disagreePlayer = sorted[0]; // Lowest value (closest to 0%)
     const agreePlayer = sorted[sorted.length - 1]; // Highest value (closest to 100%)
+    const minVal = disagreePlayer[1];
+    const maxVal = agreePlayer[1];
+    const spread = maxVal - minVal;
 
-    // If there is actual difference in stance
-    if (agreePlayer[1] > disagreePlayer[1]) {
-      this.showdownBox.style.display = 'block';
-      this.btnStartDebateTimer.style.setProperty('display', (this.mode === 'HOST') ? 'inline-flex' : 'none', 'important');
-      this.fighterDisagreeName.textContent = disagreePlayer[0];
-      this.fighterDisagreeVal.textContent = `${disagreePlayer[1]}%`;
-      this.fighterAgreeName.textContent = agreePlayer[0];
-      this.fighterAgreeVal.textContent = `${agreePlayer[1]}%`;
-    } else {
-      this.showdownBox.style.display = 'none';
+    const allKontra = maxVal <= 30;
+    const allPro = minVal >= 70;
+    const isConsensus = allKontra || allPro || spread <= 15;
+
+    this.showdownBox.style.display = 'block';
+
+    if (isConsensus) {
+      if (this.showdownVersusContent) this.showdownVersusContent.style.display = 'none';
+      if (this.consensusNotice) this.consensusNotice.style.display = 'block';
+      if (this.showdownBadge) this.showdownBadge.textContent = 'SESI DISKUSI BERSAMA';
+
+      if (allKontra) {
+        if (this.consensusTitle) {
+          this.consensusTitle.textContent = 'Semua Pemain Kompak Kontra';
+          this.consensusTitle.style.color = 'var(--color-disagree)';
+        }
+        if (this.consensusDesc) {
+          this.consensusDesc.textContent = 'Seluruh pemain memilih di bawah atau sama dengan 30%. Tidak ada adu argumen, lanjut diskusi biasa.';
+        }
+      } else if (allPro) {
+        if (this.consensusTitle) {
+          this.consensusTitle.textContent = 'Semua Pemain Kompak Pro';
+          this.consensusTitle.style.color = 'var(--color-agree)';
+        }
+        if (this.consensusDesc) {
+          this.consensusDesc.textContent = 'Seluruh pemain memilih di atas atau sama dengan 70%. Tidak ada adu argumen, lanjut diskusi biasa.';
+        }
+      } else {
+        if (this.consensusTitle) {
+          this.consensusTitle.textContent = 'Pandangan Pemain Searah';
+          this.consensusTitle.style.color = 'var(--color-neutral)';
+        }
+        if (this.consensusDesc) {
+          this.consensusDesc.textContent = 'Jarak pandangan antar pemain sangat dekat. Tidak ada adu argumen, lanjut diskusi biasa.';
+        }
+      }
+      return;
     }
+
+    if (this.showdownVersusContent) this.showdownVersusContent.style.display = 'block';
+    if (this.consensusNotice) this.consensusNotice.style.display = 'none';
+    if (this.showdownBadge) this.showdownBadge.textContent = 'DUA POSISI PALING BERSEBERANGAN';
+
+    this.btnStartDebateTimer.style.setProperty('display', (this.mode === 'HOST') ? 'inline-flex' : 'none', 'important');
+    this.fighterDisagreeName.textContent = disagreePlayer[0];
+    this.fighterDisagreeVal.textContent = `${disagreePlayer[1]}%`;
+    this.fighterAgreeName.textContent = agreePlayer[0];
+    this.fighterAgreeVal.textContent = `${agreePlayer[1]}%`;
   }
 
   runDebateCountdown(seconds = 30) {

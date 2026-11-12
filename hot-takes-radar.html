@@ -21,7 +21,7 @@
   <!-- PeerJS -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
-  <link rel="stylesheet" href="hot-takes.css?v=10">
+  <link rel="stylesheet" href="hot-takes.css?v=11">
 </head>
 <body>
   <div class="ambient-glow glow-top"></div>
@@ -121,23 +121,31 @@
 
           <!-- 30-Second Showdown Card -->
           <div class="showdown-box" id="showdownBox" style="display: none;">
-            <div class="showdown-badge">DUA POSISI PALING BERSEBERANGAN</div>
-            <div class="versus-grid">
-              <div class="fighter-card disagree-side">
-                <div class="fighter-stance label-disagree">KONTRA (<span id="fighterDisagreeVal">0%</span>)</div>
-                <div class="fighter-name" id="fighterDisagreeName">-</div>
+            <div class="showdown-badge" id="showdownBadge">DUA POSISI PALING BERSEBERANGAN</div>
+
+            <div id="showdownVersusContent">
+              <div class="versus-grid">
+                <div class="fighter-card disagree-side">
+                  <div class="fighter-stance label-disagree">KONTRA (<span id="fighterDisagreeVal">0%</span>)</div>
+                  <div class="fighter-name" id="fighterDisagreeName">-</div>
+                </div>
+                <div class="versus-badge">VS</div>
+                <div class="fighter-card agree-side">
+                  <div class="fighter-stance label-agree">PRO (<span id="fighterAgreeVal">100%</span>)</div>
+                  <div class="fighter-name" id="fighterAgreeName">-</div>
+                </div>
               </div>
-              <div class="versus-badge">VS</div>
-              <div class="fighter-card agree-side">
-                <div class="fighter-stance label-agree">PRO (<span id="fighterAgreeVal">100%</span>)</div>
-                <div class="fighter-name" id="fighterAgreeName">-</div>
+
+              <div class="timer-wrapper">
+                <div class="debate-timer-circle" id="debateTimerDisplay">30s</div>
               </div>
+              <button class="btn btn-start-debate" id="btnStartDebateTimer">Mulai Timer Adu Argumen (30s)</button>
             </div>
 
-            <div class="timer-wrapper">
-              <div class="debate-timer-circle" id="debateTimerDisplay">30s</div>
+            <div class="consensus-notice" id="consensusNotice" style="display: none;">
+              <h3 class="consensus-title" id="consensusTitle">Semua Pemain Satu Suara</h3>
+              <p class="consensus-desc" id="consensusDesc">Tidak ada kubu berseberangan. Silakan lanjut sesi diskusi bersama.</p>
             </div>
-            <button class="btn btn-start-debate" id="btnStartDebateTimer">Mulai Timer Adu Argumen (30s)</button>
           </div>
 
           <!-- Host Controls -->
