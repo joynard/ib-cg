@@ -349,6 +349,7 @@ class HotTakesGame {
 
     if (this.mode === 'HOST') {
       const canStart = this.players.length >= 2;
+      this.btnStartGame.style.display = 'inline-flex';
       this.btnStartGame.disabled = !canStart;
       this.btnStartGame.textContent = canStart ? 'Mulai Hot Takes Radar' : 'Butuh Minimal 2 Pemain';
       this.lobbyNotice.style.display = 'none';

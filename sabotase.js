@@ -362,6 +362,7 @@ class SabotaseGame {
 
     if (this.mode === 'HOST') {
       const canStart = this.players.length >= 3;
+      this.btnStartGame.style.display = 'inline-flex';
       this.btnStartGame.disabled = !canStart;
       this.btnStartGame.textContent = canStart ? 'Mulai Babak Sabotase' : 'Butuh Minimal 3 Pemain';
       this.lobbyNotice.style.display = 'none';
