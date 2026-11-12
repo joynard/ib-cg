@@ -156,12 +156,23 @@ class HotTakesGame {
 
   updateSliderLabel(val) {
     let text = `${val}% — Netral`;
-    if (val <= 15) text = `${val}% — Sangat Tidak Setuju!`;
-    else if (val <= 35) text = `${val}% — Cenderung Tidak Setuju`;
-    else if (val >= 85) text = `${val}% — Sangat Setuju Banget!`;
-    else if (val >= 65) text = `${val}% — Cenderung Setuju`;
+    let color = 'var(--color-neutral)';
+    if (val <= 15) {
+      text = `${val}% — Sangat Tidak Setuju!`;
+      color = 'var(--color-disagree)';
+    } else if (val <= 35) {
+      text = `${val}% — Cenderung Tidak Setuju`;
+      color = 'rgba(244, 63, 94, 0.85)';
+    } else if (val >= 85) {
+      text = `${val}% — Sangat Setuju Banget!`;
+      color = 'var(--color-agree)';
+    } else if (val >= 65) {
+      text = `${val}% — Cenderung Setuju`;
+      color = 'rgba(16, 185, 129, 0.85)';
+    }
 
     this.sliderValDisplay.textContent = text;
+    this.sliderValDisplay.style.color = color;
   }
 
   // --- ROOM SETUP ---
@@ -392,19 +403,45 @@ class HotTakesGame {
       return;
     }
 
-    entries.forEach(([name, val]) => {
+    // Sort ascending by value to calculate non-overlapping tiers
+    const sortedEntries = [...entries].sort((a, b) => a[1] - b[1]);
+    let currentTier = 0;
+    let prevVal = -999;
+
+    sortedEntries.forEach(([name, val]) => {
+      // If within 15% of previous pin, bump tier to avoid label collision
+      if (Math.abs(val - prevVal) < 15) {
+        currentTier = (currentTier + 1) % 3;
+      } else {
+        currentTier = 0;
+      }
+      prevVal = val;
+
+      const isMe = (name.toLowerCase() === this.playerName.toLowerCase());
       const pin = document.createElement('div');
-      pin.className = `player-pin ${name === this.playerName ? 'is-me' : ''}`;
+
+      // Horizontal clamping classes
+      let alignClass = 'pin-centered';
+      if (val <= 12) alignClass = 'pin-edge-left';
+      else if (val >= 88) alignClass = 'pin-edge-right';
+
+      pin.className = `player-pin tier-${currentTier} ${alignClass} ${isMe ? 'is-me' : ''}`;
       pin.style.left = `${val}%`;
 
       const dot = document.createElement('div');
       dot.className = 'player-pin-dot';
+      pin.appendChild(dot);
+
+      if (currentTier > 0) {
+        const stem = document.createElement('div');
+        stem.className = 'player-pin-stem';
+        pin.appendChild(stem);
+      }
 
       const label = document.createElement('div');
       label.className = 'player-pin-name';
       label.textContent = `${name} (${val}%)`;
 
-      pin.appendChild(dot);
       pin.appendChild(label);
       this.playerPinContainer.appendChild(pin);
     });
@@ -439,14 +476,22 @@ class HotTakesGame {
     if (this.debateTimerInterval) clearInterval(this.debateTimerInterval);
     this.debateSecondsLeft = seconds;
     this.debateTimerDisplay.textContent = `${this.debateSecondsLeft}s`;
+    this.debateTimerDisplay.classList.remove('critical');
 
     this.debateTimerInterval = setInterval(() => {
       this.debateSecondsLeft--;
       if (this.debateSecondsLeft <= 0) {
         clearInterval(this.debateTimerInterval);
-        this.debateTimerDisplay.textContent = 'WAKTU HABIS!';
+        this.debateTimerDisplay.textContent = '0s';
+        this.debateTimerDisplay.classList.remove('critical');
+        this.showToast('⏱️ Waktu adu argumen 30 detik selesai!');
       } else {
         this.debateTimerDisplay.textContent = `${this.debateSecondsLeft}s`;
+        if (this.debateSecondsLeft <= 10) {
+          this.debateTimerDisplay.classList.add('critical');
+        } else {
+          this.debateTimerDisplay.classList.remove('critical');
+        }
       }
     }, 1000);
   }

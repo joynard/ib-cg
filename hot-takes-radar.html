@@ -109,12 +109,12 @@
           <div class="slider-container">
             <div class="slider-val-display" id="sliderValDisplay">50% — Netral</div>
             <input type="range" class="custom-range" id="sliderRange" min="0" max="100" value="50">
-            <button class="btn btn-primary" id="btnLockStance">Kirim Posisi Pandangan</button>
+            <button class="btn btn-lock-stance" id="btnLockStance">Kirim Posisi Pandangan</button>
           </div>
 
           <!-- 30-Second Showdown Card -->
           <div class="showdown-box" id="showdownBox" style="display: none;">
-            <div class="showdown-header">DUA POSISI PALING BERSEBERANGAN</div>
+            <div class="showdown-badge">DUA POSISI PALING BERSEBERANGAN</div>
             <div class="versus-grid">
               <div class="fighter-card disagree-side">
                 <div class="fighter-stance label-disagree">KONTRA (<span id="fighterDisagreeVal">0%</span>)</div>
@@ -127,13 +127,16 @@
               </div>
             </div>
 
-            <div class="debate-timer-circle" id="debateTimerDisplay">30s</div>
-            <button class="btn btn-secondary" id="btnStartDebateTimer" style="margin-top: 0.6rem;">Mulai Timer Adu Argumen (30s) ⏱️</button>
+            <div class="timer-wrapper">
+              <div class="debate-timer-circle" id="debateTimerDisplay">30s</div>
+            </div>
+            <button class="btn btn-start-debate" id="btnStartDebateTimer">Mulai Timer Adu Argumen (30s) ⏱️</button>
           </div>
 
           <!-- Host Controls -->
-          <div id="hostControlsSection" style="display: none; margin-top: 1.5rem;">
-            <button class="btn btn-primary" id="btnNextStatement">Pernyataan Selanjutnya ➔</button>
+          <div id="hostControlsSection" class="host-controls-wrapper" style="display: none;">
+            <div class="host-panel-label">KONTROL MODERATOR CG</div>
+            <button class="btn btn-host-next" id="btnNextStatement">Pernyataan Selanjutnya ➔</button>
           </div>
         </div>
       </section>
