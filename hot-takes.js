@@ -46,6 +46,7 @@ class HotTakesGame {
     this.stances = {}; // { playerName: number }
     this.debateTimerInterval = null;
     this.debateSecondsLeft = 30;
+    this.isDebateLocked = false;
 
     this.initDOM();
     this.bindEvents();
@@ -111,12 +112,17 @@ class HotTakesGame {
 
     // Slider Input
     this.sliderRange.addEventListener('input', (e) => {
+      if (this.isDebateLocked) return;
       this.myStance = parseInt(e.target.value, 10);
       this.updateSliderLabel(this.myStance);
     });
 
     // Lock & Send Stance
     this.btnLockStance.addEventListener('click', () => {
+      if (this.isDebateLocked) {
+        this.showToast('Posisi terkunci saat timer adu argumen dimulai!');
+        return;
+      }
       this.sendStanceUpdate(this.myStance);
       this.showToast('Posisi pandanganmu berhasil dikirim ke Radar!');
       this.btnLockStance.textContent = 'Perbarui Posisi';
@@ -380,6 +386,9 @@ class HotTakesGame {
     this.currentStatementIndex = index;
     this.currentStatementText = text;
     this.myStance = 50;
+    this.isDebateLocked = false;
+    this.sliderRange.disabled = false;
+    this.btnLockStance.disabled = false;
     this.sliderRange.value = 50;
     this.updateSliderLabel(50);
     this.btnLockStance.textContent = 'Kirim Posisi Pandangan';
@@ -404,6 +413,7 @@ class HotTakesGame {
   }
 
   sendStanceUpdate(val) {
+    if (this.isDebateLocked) return;
     const safeVal = Math.min(100, Math.max(0, parseInt(val, 10)));
     this.myStance = safeVal;
 
@@ -419,6 +429,7 @@ class HotTakesGame {
 
   recordStance(playerName, value) {
     if (this.mode !== 'HOST') return;
+    if (this.isDebateLocked) return;
 
     this.stances[playerName] = value;
 
@@ -514,6 +525,15 @@ class HotTakesGame {
     this.debateSecondsLeft = seconds;
     this.debateTimerDisplay.textContent = `${this.debateSecondsLeft}s`;
     this.debateTimerDisplay.classList.remove('critical');
+
+    // Lock stance changes across all players when debate timer starts
+    this.isDebateLocked = true;
+    this.sliderRange.disabled = true;
+    this.btnLockStance.disabled = true;
+    this.btnLockStance.textContent = '🔒 Posisi Terkunci (Sedang Adu Argumen)';
+    if (this.btnStartDebateTimer) {
+      this.btnStartDebateTimer.disabled = true;
+    }
 
     this.debateTimerInterval = setInterval(() => {
       this.debateSecondsLeft--;
