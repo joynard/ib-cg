@@ -420,13 +420,13 @@ class HotTakesGame {
       const isMe = (name.toLowerCase() === this.playerName.toLowerCase());
       const pin = document.createElement('div');
 
-      // Horizontal clamping classes
+      // Horizontal boundary clamping classes
       let alignClass = 'pin-centered';
-      if (val <= 12) alignClass = 'pin-edge-left';
-      else if (val >= 88) alignClass = 'pin-edge-right';
+      if (val <= 15) alignClass = 'pin-edge-left';
+      else if (val >= 85) alignClass = 'pin-edge-right';
 
       pin.className = `player-pin tier-${currentTier} ${alignClass} ${isMe ? 'is-me' : ''}`;
-      pin.style.left = `${val}%`;
+      pin.style.left = `calc(12px + (${val} / 100) * (100% - 24px))`;
 
       const dot = document.createElement('div');
       dot.className = 'player-pin-dot';
