@@ -9,6 +9,13 @@ const GAMES_DATA = [
     description: 'Tulis cerita atau rahasia kecilmu secara anonim ke dalam Box. Tebak siapa penulisnya dan rasakan momen seru bersama teman CG-mu.',
     url: 'anonymous-box.html',
     btnLabel: 'Mainkan Game'
+  },
+  {
+    id: 'sabotase-kata',
+    title: 'Sabotase Kata',
+    description: 'Semua peserta mendapatkan satu kata rahasia yang sama kecuali satu orang Impostor. Sebutkan satu kata petunjuk bergiliran di dunia nyata, cari siapa yang mencurigakan, dan lakukan voting!',
+    url: 'sabotase-kata.html',
+    btnLabel: 'Mainkan Game'
   }
 ];
 

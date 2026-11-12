@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sabotase Kata | IB CG</title>
+  <meta name="description" content="Sabotase Kata (CG Chameleon / Undercover) - Game tebak penyusup kata rahasia Connect Group.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.peerjs.com wss://*.peerjs.com https://unpkg.com; img-src 'self' data:; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
+  <!-- Favicon / App Icon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <!-- PeerJS -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <link rel="stylesheet" href="sabotase.css">
+</head>
+<body>
+  <div class="ambient-glow glow-top"></div>
+
+  <div class="app-container">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <h1 class="brand-title">SABOTASE <span class="highlight">KATA</span></h1>
+      <div class="top-meta" id="topMeta" style="display: none;">
+        <span class="room-pill">ROOM: <strong id="displayRoomCode">SABO-XXXX</strong></span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- SCREEN 1: WELCOME & JOIN -->
+      <section class="screen active" id="screenWelcome">
+        <div class="game-card">
+          <h2 class="card-title">SABOTASE KATA</h2>
+          <p class="card-subtitle">Temukan sang Impostor yang menyusup di antara kalian, atau bluffing sampai akhir jika kamu penyusupnya!</p>
+
+          <div class="form-group">
+            <label for="playerNameInput">Nama Panggilan</label>
+            <input type="text" id="playerNameInput" placeholder="Contoh: Daniel" maxlength="15" autocomplete="off">
+          </div>
+
+          <div class="action-stack">
+            <button class="btn btn-primary" id="btnCreateRoom">Buat Room Baru (Host)</button>
+            <div class="join-divider"><span>ATAU GABUNG ROOM</span></div>
+            <div class="join-group">
+              <input type="text" id="joinCodeInput" placeholder="KODE ROOM" maxlength="10">
+              <button class="btn btn-secondary" id="btnJoinRoom">Gabung</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 2: LOBBY -->
+      <section class="screen" id="screenLobby">
+        <div class="game-card">
+          <h2 class="card-title">LOBBY PERMAINAN</h2>
+          <p class="card-subtitle">Bagikan kode room ke teman-teman CG-mu.</p>
+
+          <div style="text-align: center; margin-bottom: 1.2rem;">
+            <span class="room-pill" style="font-size: 1.1rem; padding: 0.5rem 1.2rem;">
+              KODE: <strong id="lobbyCodeBadge">SABO-0000</strong>
+            </span>
+          </div>
+
+          <div class="form-group" id="categoryGroup" style="display: none;">
+            <label for="categorySelect">Pilih Kategori Kata</label>
+            <select id="categorySelect">
+              <option value="random">Acak / Campuran</option>
+              <option value="tokoh_alkitab">Tokoh Alkitab</option>
+              <option value="tempat_nongkrong">Tempat Nongkrong</option>
+              <option value="daily_life">Istilah Daily Life</option>
+              <option value="makanan_minuman">Makanan & Minuman</option>
+            </select>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.4rem;">
+            <span>PEMAIN TERHUBUNG</span>
+            <span><strong id="connectedCount">1</strong> / 12</span>
+          </div>
+
+          <div class="player-list" id="playerListContainer"></div>
+
+          <button class="btn btn-primary" id="btnStartGame" disabled>Mulai Babak Sabotase</button>
+          <p class="card-subtitle" id="lobbyNotice" style="margin-top: 1rem; display: none;">Menunggu Host memulai babak...</p>
+        </div>
+      </section>
+
+      <!-- SCREEN 3: SECRET WORD REVEAL (PRIVACY SHIELD) -->
+      <section class="screen" id="screenReveal">
+        <div class="game-card">
+          <h2 class="card-title">KATA RAHASIA</h2>
+          <p class="card-subtitle">Pastikan layar HP tidak terlihat oleh orang di sebelahmu!</p>
+
+          <div class="peek-container">
+            <div class="secret-word-box">
+              <div class="category-label" id="revealCategoryName">KATEGORI</div>
+              <div class="secret-word-text" id="revealWordText">???</div>
+              <span class="role-badge" id="revealRoleBadge">ROLE</span>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.8rem;" id="revealRoleDesc"></p>
+            </div>
+
+            <!-- Hold-to-peek Privacy Shield Overlay -->
+            <div class="peek-shield" id="peekShield">
+              <div style="font-size: 2rem; margin-bottom: 0.4rem;">👁️</div>
+              <div class="peek-shield-title">TAHAN UNTUK MENGINTIP</div>
+              <div class="peek-shield-sub">Lepas jari untuk menutup kembali layar</div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="btnDonePeeking">Saya Sudah Paham & Lanjut ➔</button>
+        </div>
+      </section>
+
+      <!-- SCREEN 4: CLUE TURN ORDER (REAL WORLD) -->
+      <section class="screen" id="screenClue">
+        <div class="game-card">
+          <h2 class="card-title">PUTARAN PETUNJUK</h2>
+          <p class="card-subtitle">
+            Kategori: <strong id="clueRoundCategory" style="color: var(--accent-amber);"></strong><br>
+            Sebutkan <strong>1 KATA PETUNJUK</strong> di dunia nyata secara bergiliran sesuai urutan berikut:
+          </p>
+
+          <div class="turn-order-list" id="turnOrderContainer"></div>
+
+          <div style="margin-top: 1.5rem;">
+            <button class="btn btn-primary" id="btnStartVoting" style="display: none;">Mulai Voting Siapa Impostor ➔</button>
+            <p class="card-subtitle" id="clueNotice" style="display: none;">Host akan membuka sesi voting setelah semua orang memberikan petunjuk.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 5: VOTING PHASE -->
+      <section class="screen" id="screenVoting">
+        <div class="game-card">
+          <h2 class="card-title">VOTING TERSANGKA</h2>
+          <p class="card-subtitle">Pilih satu nama yang petunjuknya paling mencurigakan atau gelagatnya seperti tidak tahu kata rahasia:</p>
+
+          <div class="voting-grid" id="votingGrid"></div>
+
+          <p style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 1rem;" id="votingProgressText">
+            0 dari 0 pemain telah memilih
+          </p>
+        </div>
+      </section>
+
+      <!-- SCREEN 6: RESULT & IMPOSTOR GUESS -->
+      <section class="screen" id="screenResult">
+        <div class="game-card">
+          <h2 class="card-title">HASIL VOTING</h2>
+
+          <div class="result-box" id="resultEliminatedBox">
+            <div class="result-tag" style="color: var(--accent-amber);">HASIL TERTUDUH TERBANYAK</div>
+            <div class="result-name" id="resultPlayerName">Nama Pemain</div>
+            <div style="font-size: 0.95rem; font-weight: 700;" id="resultRoleReveal"></div>
+          </div>
+
+          <!-- Impostor Last Guess Opportunity -->
+          <div id="impostorGuessBox" style="display: none; background: #16202a; border: 1px solid var(--accent-teal); border-radius: var(--radius-md); padding: 1.2rem; margin: 1.2rem 0; text-align: center;">
+            <h3 style="font-size: 1.1rem; color: #fff; margin-bottom: 0.4rem;">KESEMPATAN TERAKHIR IMPOSTOR!</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.8rem;">Tebak apa kata rahasianya untuk membalikkan keadaan dan menang:</p>
+            <div class="form-group" style="margin-bottom: 0.8rem;">
+              <input type="text" id="impostorGuessInput" placeholder="Ketik kata rahasia..." maxlength="30">
+            </div>
+            <button class="btn btn-primary" id="btnSubmitImpostorGuess">Kirim Tebakan Akhir</button>
+          </div>
+
+          <!-- Final Winner Banner -->
+          <div id="finalWinnerBanner" style="display: none; text-align: center; padding: 1.4rem; background: #0c1218; border-radius: var(--radius-md); margin: 1.2rem 0; border: 1px solid var(--border-card);">
+            <h3 id="finalWinnerTitle" style="font-size: 1.5rem; font-weight: 900; margin-bottom: 0.4rem;"></h3>
+            <p id="finalWinnerDesc" style="font-size: 0.92rem; color: var(--text-muted);"></p>
+          </div>
+
+          <button class="btn btn-primary" id="btnNextRound" style="display: none; margin-top: 1rem;">Mulai Babak Baru (Kata Baru) ➔</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toastNotification" class="toast-popup" aria-live="polite"></div>
+
+  <script src="realtime.js"></script>
+  <script src="sabotase-words.js"></script>
+  <script src="sabotase.js"></script>
+</body>
+</html>

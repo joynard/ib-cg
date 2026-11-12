@@ -116,6 +116,8 @@ body {
 .games-grid {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 1.6rem;
   margin-bottom: 3.5rem;
 }
 
