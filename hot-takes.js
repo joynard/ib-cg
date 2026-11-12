@@ -9,6 +9,7 @@ const ALLOWED_CLIENT_ACTIONS = new Set([
   'JOIN',
   'REJOIN',
   'SUBMIT_STANCE',
+  'LEAVE',
   'PING'
 ]);
 
@@ -17,6 +18,7 @@ const ALLOWED_HOST_ACTIONS = new Set([
   'SYNC_STATEMENT',
   'SYNC_ALL_STANCES',
   'START_DEBATE_TIMER',
+  'SYNC_REJOIN_STATE',
   'HOST_RESTART_GAME',
   'PING'
 ]);
@@ -173,9 +175,12 @@ class HotTakesGame {
 
     this.playerName = name;
     this.mode = 'HOST';
-    this.roomCode = window.realtimeEngine.initHost(null,
+    this.roomCode = window.realtimeEngine.initHost(
+      null,
       (conn) => this.onPlayerConnected(conn),
-      (data, conn) => this.onMessageReceived(data, conn)
+      (data, conn) => this.onMessageReceived(data, conn),
+      (conn) => this.onPlayerDisconnected(conn),
+      'TAKE'
     );
 
     this.players = [{ id: 'host', name: this.playerName, isHost: true }];
@@ -190,29 +195,38 @@ class HotTakesGame {
 
   handleJoinRoom() {
     const name = sanitizeString(this.playerNameInput.value, 15);
-    const code = this.joinCodeInput.value.replace(/[^A-Z0-9-]/gi, '').trim().toUpperCase().slice(0, 12);
+    let rawCode = this.joinCodeInput.value.replace(/[^A-Z0-9-]/gi, '').trim().toUpperCase().slice(0, 12);
 
     if (!name) {
       this.showToast('Silakan masukkan nama Anda.');
       return;
     }
-    if (!code) {
+    if (!rawCode) {
       this.showToast('Silakan masukkan Kode Room.');
       return;
     }
+
+    const code = rawCode.includes('-') ? rawCode : `TAKE-${rawCode}`;
 
     this.playerName = name;
     this.roomCode = code;
     this.mode = 'CLIENT';
 
-    window.realtimeEngine.initClient(code, name,
+    window.realtimeEngine.initClient(
+      code,
+      name,
       () => {
         this.displayRoomCode.textContent = this.roomCode;
         this.lobbyCodeBadge.textContent = this.roomCode;
         this.topMeta.style.display = 'flex';
         this.showScreen('lobby');
       },
-      (data) => this.onMessageReceived(data)
+      (data) => this.onMessageReceived(data),
+      (err) => {
+        this.showScreen('welcome');
+        this.topMeta.style.display = 'none';
+      },
+      'TAKE'
     );
 
     this.saveSession();
@@ -235,7 +249,35 @@ class HotTakesGame {
 
     this.updateLobbyUI();
     window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
+
+    // If client connects mid-game, synchronize current statement and stances
+    if (this.mode === 'HOST' && this.screens.radar.classList.contains('active')) {
+      window.realtimeEngine.sendDirectToClient(safeName, 'SYNC_REJOIN_STATE', {
+        players: this.players,
+        statementIndex: this.currentStatementIndex,
+        statementText: this.currentStatementText,
+        stances: this.stances,
+        inRound: true
+      });
+    }
+
     this.saveSession();
+  }
+
+  onPlayerDisconnected(conn) {
+    const discName = conn && conn.metadata ? conn.metadata.name : null;
+    if (!discName) return;
+
+    const idx = this.players.findIndex(p => p.name.toLowerCase() === discName.toLowerCase());
+    if (idx >= 0 && !this.players[idx].isHost) {
+      this.players.splice(idx, 1);
+      delete this.stances[discName];
+      this.showToast(`${discName} keluar dari room.`);
+      this.updateLobbyUI();
+      window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
+      window.realtimeEngine.broadcast('SYNC_ALL_STANCES', { stances: this.stances });
+      this.renderSpectrumPins(this.stances);
+    }
   }
 
   updateLobbyUI() {
@@ -284,6 +326,13 @@ class HotTakesGame {
   }
 
   setupLocalStatement(index, text) {
+    if (this.debateTimerInterval) {
+      clearInterval(this.debateTimerInterval);
+      this.debateTimerInterval = null;
+    }
+    this.debateSecondsLeft = 30;
+    this.debateTimerDisplay.textContent = '30s';
+
     this.currentStatementIndex = index;
     this.currentStatementText = text;
     this.myStance = 50;
@@ -294,7 +343,7 @@ class HotTakesGame {
     this.statementTag.textContent = `HOT TAKE #${index + 1} DARI ${HOT_TAKES_STATEMENTS.length}`;
     this.statementText.textContent = `“${text}”`;
 
-    // Clear plotted pins
+    // Clear plotted pins and showdown box
     this.playerPinContainer.innerHTML = '';
     this.showdownBox.style.display = 'none';
 
@@ -338,7 +387,10 @@ class HotTakesGame {
     this.playerPinContainer.innerHTML = '';
 
     const entries = Object.entries(stances);
-    if (entries.length === 0) return;
+    if (entries.length === 0) {
+      this.showdownBox.style.display = 'none';
+      return;
+    }
 
     entries.forEach(([name, val]) => {
       const pin = document.createElement('div');
@@ -360,6 +412,8 @@ class HotTakesGame {
     // Check if at least 2 people have submitted to show the 30-sec Showdown
     if (entries.length >= 2) {
       this.updateShowdownFighters(entries);
+    } else {
+      this.showdownBox.style.display = 'none';
     }
   }
 
@@ -376,6 +430,8 @@ class HotTakesGame {
       this.fighterDisagreeVal.textContent = `${disagreePlayer[1]}%`;
       this.fighterAgreeName.textContent = agreePlayer[0];
       this.fighterAgreeVal.textContent = `${agreePlayer[1]}%`;
+    } else {
+      this.showdownBox.style.display = 'none';
     }
   }
 
@@ -413,6 +469,37 @@ class HotTakesGame {
             isHost: Boolean(p.isHost)
           }));
           this.updateLobbyUI();
+        }
+        break;
+
+      case 'REJOIN':
+        if (this.mode === 'HOST' && payload) {
+          const safeName = sanitizeString(payload.name, 15);
+          if (safeName) {
+            window.realtimeEngine.sendDirectToClient(safeName, 'SYNC_REJOIN_STATE', {
+              players: this.players,
+              statementIndex: this.currentStatementIndex,
+              statementText: this.currentStatementText,
+              stances: this.stances,
+              inRound: this.screens.radar.classList.contains('active')
+            });
+          }
+        }
+        break;
+
+      case 'SYNC_REJOIN_STATE':
+        if (payload) {
+          if (payload.players) {
+            this.players = payload.players;
+            this.updateLobbyUI();
+          }
+          if (payload.inRound && payload.statementText) {
+            this.setupLocalStatement(payload.statementIndex, payload.statementText);
+            if (payload.stances) {
+              this.stances = payload.stances;
+              this.renderSpectrumPins(this.stances);
+            }
+          }
         }
         break;
 

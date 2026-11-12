@@ -317,12 +317,16 @@ class AnonymousBoxGame {
       if (this.mode === 'HOST') {
         window.realtimeEngine.initHost(this.roomCode,
           (conn) => this.onPlayerConnected(conn),
-          (msg, conn) => this.onMessageReceived(msg, conn)
+          (msg, conn) => this.onMessageReceived(msg, conn),
+          (conn) => this.onPlayerDisconnected(conn),
+          'BOX'
         );
       } else if (this.mode === 'CLIENT') {
         window.realtimeEngine.initClient(this.roomCode, this.playerName,
           () => console.log('[Session] Reconnected to room'),
-          (msg) => this.onMessageReceived(msg)
+          (msg) => this.onMessageReceived(msg),
+          () => { this.showScreen('welcome'); },
+          'BOX'
         );
       }
 
@@ -449,9 +453,12 @@ class AnonymousBoxGame {
     this.playerName = name;
     this.mode = 'HOST';
 
-    this.roomCode = window.realtimeEngine.initHost(null, 
+    this.roomCode = window.realtimeEngine.initHost(
+      null, 
       (conn) => this.onPlayerConnected(conn),
-      (data, conn) => this.onMessageReceived(data, conn)
+      (data, conn) => this.onMessageReceived(data, conn),
+      (conn) => this.onPlayerDisconnected(conn),
+      'BOX'
     );
 
     this.players = [{ id: 'host', name: this.playerName, isHost: true }];
@@ -463,28 +470,36 @@ class AnonymousBoxGame {
 
   handleJoinRoom() {
     const name = sanitizeString(this.playerNameInput.value, 15);
-    const code = this.joinCodeInput.value.replace(/[^A-Z0-9-]/gi, '').trim().toUpperCase().slice(0, 12);
+    const rawCode = this.joinCodeInput.value.replace(/[^A-Z0-9-]/gi, '').trim().toUpperCase().slice(0, 12);
 
     if (!name) {
       this.showToast('Silakan masukkan nama Anda terlebih dahulu.');
       return;
     }
-    if (!code) {
-      this.showToast('Silakan masukkan Kode Room (contoh: BOX-8492).');
+    if (!rawCode) {
+      this.showToast('Silakan masukkan Kode Room (contoh: BOX-8492 atau 8492).');
       return;
     }
+
+    const code = rawCode.includes('-') ? rawCode : `BOX-${rawCode}`;
 
     this.playerName = name;
     this.roomCode = code;
     this.mode = 'CLIENT';
 
-    window.realtimeEngine.initClient(code, name, 
+    window.realtimeEngine.initClient(
+      code,
+      name, 
       () => {
         this.lobbyCodeText.textContent = this.roomCode;
         this.displayRoomCode.textContent = this.roomCode;
         this.showScreen('lobby');
       },
-      (data) => this.onMessageReceived(data)
+      (data) => this.onMessageReceived(data),
+      (err) => {
+        this.showScreen('welcome');
+      },
+      'BOX'
     );
   }
 
@@ -506,6 +521,40 @@ class AnonymousBoxGame {
     this.updateLobbyUI();
     window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
     this.saveSessionState();
+  }
+
+  onPlayerDisconnected(conn) {
+    const rawName = conn && conn.metadata ? conn.metadata.name : null;
+    if (!rawName) return;
+
+    const idx = this.players.findIndex(p => p.name.toLowerCase() === rawName.toLowerCase());
+    if (idx >= 0 && !this.players[idx].isHost) {
+      this.players.splice(idx, 1);
+      this.showToast(`${rawName} keluar dari room.`);
+      this.updateLobbyUI();
+      window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
+
+      if (this.screens.waiting && this.screens.waiting.classList.contains('active')) {
+        const roundIdx = this.currentRoundIndex;
+        const currentSubs = this.submissions[roundIdx] || [];
+        const received = currentSubs.length;
+        const total = this.players.length;
+        window.realtimeEngine.broadcast('PROGRESS_UPDATE', { received, total });
+        this.showWaitingScreen(received, total);
+        if (received >= total && total >= 2) {
+          for (let i = this.submissions[roundIdx].length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [this.submissions[roundIdx][i], this.submissions[roundIdx][j]] = [this.submissions[roundIdx][j], this.submissions[roundIdx][i]];
+          }
+          window.realtimeEngine.broadcast('START_REVEAL_PHASE', {
+            roundIndex: roundIdx,
+            cards: this.submissions[roundIdx]
+          });
+          this.startRevealPhase();
+        }
+      }
+      this.saveSessionState();
+    }
   }
 
   updateLobbyUI() {

@@ -1,6 +1,7 @@
 /**
- * RealtimeEngine - Resilient Dual-Engine Networking (BroadcastChannel + PeerJS)
- * Features system-wide msgId deduplication to eliminate double-count bugs.
+ * RealtimeEngine - Resilient Dual-Engine Networking (BroadcastChannel + PeerJS WebRTC)
+ * Features system-wide msgId deduplication, true handshake confirmation,
+ * bidirectional disconnect tracking, and zero-leak state synchronization.
  */
 
 class RealtimeEngine {
@@ -8,12 +9,16 @@ class RealtimeEngine {
     this.peer = null;
     this.isHost = false;
     this.roomCode = null;
-    this.connections = []; // For Host: list of client connections
-    this.hostConnection = null; // For Client: connection to Host
+    this.codePrefix = 'BOX';
+    this.connections = []; // For Host: list of client WebRTC connections
+    this.hostConnection = null; // For Client: WebRTC connection to Host
     this.onMessageCallback = null;
     this.onPlayerConnectCallback = null;
     this.onPlayerDisconnectCallback = null;
+    this.onConnectedCallback = null;
+    this.onDisconnectCallback = null;
     this.heartbeatInterval = null;
+    this.connectTimeout = null;
     
     // BroadcastChannel for local/offline tab multiplayer
     this.broadcastChannel = null;
@@ -26,16 +31,49 @@ class RealtimeEngine {
 
     // Deduplication Set for multi-channel packets
     this.processedMsgIds = new Set();
+
+    // Listen for tab unload to gracefully notify host
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', () => {
+        if (!this.isHost && this.hasConnectedOnce && this.playerName) {
+          this.sendToHost('LEAVE', { name: this.playerName });
+        }
+      });
+    }
   }
 
-  // Generate short room code like 'BOX-MKFS'
-  generateRoomCode() {
+  // Generate short room code like 'BOX-MKFS' or 'SABO-MKFS'
+  generateRoomCode(prefix = 'BOX') {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let code = '';
     for (let i = 0; i < 4; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    return `BOX-${code}`;
+    return `${prefix}-${code}`;
+  }
+
+  // Universal Toast Notification
+  showErrorToast(msg) {
+    if (window.activeGame && typeof window.activeGame.showToast === 'function') {
+      window.activeGame.showToast(msg);
+    } else if (window.sabotaseGame && typeof window.sabotaseGame.showToast === 'function') {
+      window.sabotaseGame.showToast(msg);
+    } else if (window.hotTakesGame && typeof window.hotTakesGame.showToast === 'function') {
+      window.hotTakesGame.showToast(msg);
+    } else if (window.anonymousApp && typeof window.anonymousApp.showToast === 'function') {
+      window.anonymousApp.showToast(msg);
+    } else {
+      console.warn('[Realtime Error]', msg);
+    }
+  }
+
+  // Clear all game session keys
+  clearActiveSession() {
+    try {
+      localStorage.removeItem('ANONYMOUS_BOX_SESSION_V1');
+      localStorage.removeItem('SABOTASE_KATA_SESSION_V1');
+      localStorage.removeItem('HOT_TAKES_RADAR_SESSION_V1');
+    } catch (e) {}
   }
 
   // Deduplicate and validate incoming packets
@@ -66,12 +104,14 @@ class RealtimeEngine {
   }
 
   // Initialize Host Room
-  initHost(roomCode, onPlayerConnect, onMessage) {
+  initHost(roomCode, onPlayerConnect, onMessage, onPlayerDisconnect, codePrefix = 'BOX') {
     this.isHost = true;
-    const rawCode = roomCode || this.generateRoomCode();
+    this.codePrefix = codePrefix;
+    const rawCode = roomCode || this.generateRoomCode(codePrefix);
     this.roomCode = rawCode.replace(/[^A-Z0-9-]/gi, '').toUpperCase().slice(0, 12);
     this.onPlayerConnectCallback = onPlayerConnect;
     this.onMessageCallback = onMessage;
+    this.onPlayerDisconnectCallback = onPlayerDisconnect;
 
     // 1. Setup Local BroadcastChannel
     this.setupBroadcastChannel();
@@ -101,6 +141,12 @@ class RealtimeEngine {
         conn.on('data', (data) => {
           if (!this.isValidPacket(data)) return;
           if (data && data.action === 'PING') return;
+          if (data && data.action === 'LEAVE') {
+            if (this.onPlayerDisconnectCallback) {
+              this.onPlayerDisconnectCallback(conn);
+            }
+            return;
+          }
           if (this.isDuplicateMsg(data)) return;
           if (this.onMessageCallback) {
             this.onMessageCallback(data, conn);
@@ -109,13 +155,23 @@ class RealtimeEngine {
 
         conn.on('close', () => {
           this.connections = this.connections.filter(c => c.peer !== conn.peer);
+          if (this.onPlayerDisconnectCallback) {
+            this.onPlayerDisconnectCallback(conn);
+          }
+        });
+
+        conn.on('error', () => {
+          this.connections = this.connections.filter(c => c.peer !== conn.peer);
+          if (this.onPlayerDisconnectCallback) {
+            this.onPlayerDisconnectCallback(conn);
+          }
         });
       });
 
       this.peer.on('error', (err) => {
         if (err.type === 'unavailable-id') {
           setTimeout(() => {
-            this.initHost(this.roomCode, this.onPlayerConnectCallback, this.onMessageCallback);
+            this.initHost(this.roomCode, this.onPlayerConnectCallback, this.onMessageCallback, this.onPlayerDisconnectCallback, this.codePrefix);
           }, 1500);
         }
       });
@@ -127,27 +183,35 @@ class RealtimeEngine {
   }
 
   // Initialize Client Join
-  initClient(roomCode, playerName, onConnected, onMessage) {
+  initClient(roomCode, playerName, onConnected, onMessage, onDisconnect, codePrefix = 'BOX') {
     this.isHost = false;
+    this.codePrefix = codePrefix;
     this.roomCode = (roomCode || '').replace(/[^A-Z0-9-]/gi, '').toUpperCase().slice(0, 12);
     this.playerName = (playerName || '').replace(/[<>&"']/g, '').trim().slice(0, 15);
+    this.onConnectedCallback = onConnected;
     this.onMessageCallback = onMessage;
+    this.onDisconnectCallback = onDisconnect;
     this.hasConnectedOnce = false;
     this.reconnectAttempts = 0;
+
+    if (this.connectTimeout) clearTimeout(this.connectTimeout);
+    this.connectTimeout = setTimeout(() => {
+      if (!this.hasConnectedOnce) {
+        this.showErrorToast(`Waktu koneksi habis. Pastikan Kode Room benar dan Host aktif.`);
+        this.clearActiveSession();
+        if (this.onDisconnectCallback) this.onDisconnectCallback(new Error('timeout'));
+      }
+    }, 12000);
 
     // 1. Setup Local BroadcastChannel
     this.setupBroadcastChannel();
 
-    // Notify Host via BroadcastChannel with slight delay to ensure listener readiness
-    setTimeout(() => {
-      if (this.broadcastChannel) {
-        this.sendToHost('JOIN', { name: playerName });
-        this.hasConnectedOnce = true;
-        if (onConnected) onConnected();
-      }
-    }, 80);
+    // Query Host via local BroadcastChannel
+    if (this.broadcastChannel) {
+      this.sendToHost('JOIN', { name: playerName });
+    }
 
-    // 2. Setup PeerJS Cloud Peer as secondary fallback
+    // 2. Setup PeerJS Cloud Peer for cross-device multiplayer
     try {
       if (this.peer) {
         try { this.peer.destroy(); } catch (e) {}
@@ -160,13 +224,11 @@ class RealtimeEngine {
       });
 
       this.peer.on('error', (err) => {
-        if (this.hasConnectedOnce) return;
-
         if (err.type === 'peer-unavailable') {
-          if (window.anonymousApp) {
-            window.anonymousApp.showToast(`Kode Room "${this.roomCode}" tidak ditemukan atau Host sudah keluar.`);
-          }
-          localStorage.removeItem('ANONYMOUS_BOX_SESSION_V1');
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
+          this.showErrorToast(`Kode Room "${this.roomCode}" tidak ditemukan atau Host sudah offline.`);
+          this.clearActiveSession();
+          if (this.onDisconnectCallback) this.onDisconnectCallback(err);
           return;
         }
 
@@ -177,6 +239,11 @@ class RealtimeEngine {
               this.connectToHost(playerName, null);
             }
           }, 2000);
+        } else {
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
+          this.showErrorToast(`Gagal terhubung ke room "${this.roomCode}".`);
+          this.clearActiveSession();
+          if (this.onDisconnectCallback) this.onDisconnectCallback(err);
         }
       });
     } catch (e) {
@@ -190,7 +257,8 @@ class RealtimeEngine {
       try { this.broadcastChannel.close(); } catch (e) {}
     }
 
-    this.broadcastChannel = new BroadcastChannel(`ANONYMOUS_BOX_ROOM_${this.roomCode}`);
+    const channelName = `${this.codePrefix}_ROOM_${this.roomCode}`;
+    this.broadcastChannel = new BroadcastChannel(channelName);
 
     this.broadcastChannel.onmessage = (event) => {
       const { sender, type, data } = event.data || {};
@@ -218,17 +286,46 @@ class RealtimeEngine {
           if (this.onPlayerConnectCallback) {
             this.onPlayerConnectCallback(mockConn);
           }
+          // Send ACK back so client confirms local channel connection
+          if (this.broadcastChannel) {
+            this.broadcastChannel.postMessage({
+              target: sender,
+              type: 'HOST_ACK_JOIN',
+              data: { action: 'HOST_ACK_JOIN', msgId: `ack-${Date.now()}` }
+            });
+          }
+        } else if (data.action === 'LEAVE') {
+          if (this.onPlayerDisconnectCallback) {
+            this.onPlayerDisconnectCallback(mockConn);
+          }
+          return;
         }
 
         if (this.onMessageCallback) {
           this.onMessageCallback(data, mockConn);
         }
-      } else if (!this.isHost && type === 'HOST_BROADCAST') {
-        if (data.action === 'PING') return;
+      } else if (!this.isHost && (type === 'HOST_ACK_JOIN' || type === 'HOST_BROADCAST')) {
+        if (!this.hasConnectedOnce) {
+          this.hasConnectedOnce = true;
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
+          if (this.onConnectedCallback) {
+            this.onConnectedCallback();
+            this.onConnectedCallback = null;
+          }
+        }
+        if (data.action === 'PING' || data.action === 'HOST_ACK_JOIN') return;
         if (this.onMessageCallback) {
           this.onMessageCallback(data);
         }
       } else if (!this.isHost && type === 'HOST_DIRECT_TO_CLIENT' && event.data.target === this.playerName) {
+        if (!this.hasConnectedOnce) {
+          this.hasConnectedOnce = true;
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
+          if (this.onConnectedCallback) {
+            this.onConnectedCallback();
+            this.onConnectedCallback = null;
+          }
+        }
         if (this.onMessageCallback) {
           this.onMessageCallback(data);
         }
@@ -245,9 +342,13 @@ class RealtimeEngine {
 
     this.hostConnection.on('open', () => {
       this.hasConnectedOnce = true;
+      if (this.connectTimeout) clearTimeout(this.connectTimeout);
       this.reconnectAttempts = 0;
       this.sendToHost('REJOIN', { name: playerName });
-      if (onConnected) onConnected();
+      if (this.onConnectedCallback) {
+        this.onConnectedCallback();
+        this.onConnectedCallback = null;
+      }
       this.startHeartbeat();
     });
 
@@ -264,7 +365,14 @@ class RealtimeEngine {
       if (this.hasConnectedOnce && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
         setTimeout(() => this.connectToHost(playerName, null), 2000);
+      } else if (this.hasConnectedOnce) {
+        this.showErrorToast('Koneksi ke Host terputus.');
+        if (this.onDisconnectCallback) this.onDisconnectCallback(new Error('closed'));
       }
+    });
+
+    this.hostConnection.on('error', (err) => {
+      console.warn('[Realtime] Host connection error:', err);
     });
   }
 
@@ -297,6 +405,26 @@ class RealtimeEngine {
           try { conn.send(packet); } catch (e) {}
         }
       });
+    }
+  }
+
+  sendDirectToClient(clientName, action, payload) {
+    const msgId = `${action}-${Date.now()}-${Math.random()}`;
+    const packet = { action, payload, msgId };
+
+    if (this.isHost && this.broadcastChannel) {
+      this.broadcastChannel.postMessage({
+        target: clientName,
+        type: 'HOST_DIRECT_TO_CLIENT',
+        data: packet
+      });
+    }
+
+    if (this.isHost) {
+      const conn = this.connections.find(c => c.metadata && c.metadata.name === clientName);
+      if (conn && conn.open && !conn.peer.startsWith('local-')) {
+        try { conn.send(packet); } catch (e) {}
+      }
     }
   }
 
