@@ -41,7 +41,7 @@ body {
   flex-direction: column;
   position: relative;
   overflow-x: hidden;
-  padding: 1rem;
+  padding: 1rem 1rem 3.5rem;
 }
 
 /* Ambient glow effect */
@@ -234,23 +234,39 @@ body {
 .spectrum-section {
   position: relative;
   margin: 1.4rem 0 2rem;
-  padding: 0 0.8rem;
+  padding: 0 0.4rem;
 }
 
 .spectrum-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   margin-bottom: 0.75rem;
-  padding: 0 4px;
+  padding: 0;
+  width: 100%;
 }
 
-.label-disagree { color: var(--color-disagree); }
-.label-neutral { color: var(--color-neutral); }
-.label-agree { color: var(--color-agree); }
+.label-disagree { 
+  color: var(--color-disagree); 
+  text-align: left;
+  flex: 1;
+}
+
+.label-neutral { 
+  color: var(--color-neutral); 
+  text-align: center;
+  flex: 1;
+}
+
+.label-agree { 
+  color: var(--color-agree); 
+  text-align: right;
+  flex: 1;
+}
 
 .spectrum-track {
   height: 14px;
@@ -684,4 +700,64 @@ body {
 .toast-popup.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* Host Moderator Controls */
+.host-controls-wrapper {
+  margin-top: 2rem;
+  margin-bottom: 1.5rem;
+  padding-top: 1.4rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.host-panel-label {
+  width: 100%;
+  text-align: center;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  margin-bottom: 0.85rem;
+}
+
+.btn-host-next {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: none;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+}
+
+.btn-host-next:hover:not(:disabled) {
+  background: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.25);
+}
+
+.btn-start-debate {
+  margin-top: 1rem;
+  background: #141c26;
+  color: #f8fafc;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.btn-start-debate:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.8);
+}
+
+.btn-lock-stance {
+  margin-top: 0.4rem;
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #ffffff;
+}
+
+.btn-lock-stance:hover:not(:disabled) {
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  transform: translateY(-2px);
 }

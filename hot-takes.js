@@ -358,10 +358,13 @@ class HotTakesGame {
     this.playerPinContainer.innerHTML = '';
     this.showdownBox.style.display = 'none';
 
+    // Restrict moderator-only controls
     if (this.mode === 'HOST') {
       this.hostControlsSection.style.display = 'block';
+      this.btnStartDebateTimer.style.display = 'inline-flex';
     } else {
       this.hostControlsSection.style.display = 'none';
+      this.btnStartDebateTimer.style.display = 'none';
     }
 
     this.showScreen('radar');
@@ -463,6 +466,7 @@ class HotTakesGame {
     // If there is actual difference in stance
     if (agreePlayer[1] > disagreePlayer[1]) {
       this.showdownBox.style.display = 'block';
+      this.btnStartDebateTimer.style.display = (this.mode === 'HOST') ? 'inline-flex' : 'none';
       this.fighterDisagreeName.textContent = disagreePlayer[0];
       this.fighterDisagreeVal.textContent = `${disagreePlayer[1]}%`;
       this.fighterAgreeName.textContent = agreePlayer[0];
