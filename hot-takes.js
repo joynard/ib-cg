@@ -400,7 +400,7 @@ class HotTakesGame {
     this.updateSliderLabel(50);
     this.btnLockStance.textContent = 'Kirim Posisi Pandangan';
 
-    this.statementTag.textContent = `HOT TAKE #${index + 1} DARI ${HOT_TAKES_STATEMENTS.length}`;
+    this.statementTag.textContent = `#${index + 1} DARI ${HOT_TAKES_STATEMENTS.length}`;
     this.statementText.textContent = `“${text}”`;
 
     // Clear plotted pins and showdown box
