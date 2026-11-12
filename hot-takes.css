@@ -191,24 +191,47 @@ body {
 
 .top-meta {
   position: absolute;
-  right: 1.25rem;
+  right: 0.85rem;
   display: flex;
   align-items: center;
 }
 
 .room-pill {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  color: var(--text-subtle);
-  background: rgba(0, 0, 0, 0.4);
-  padding: 0.3rem 0.65rem;
+  color: var(--accent-blue);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 0.22rem 0.55rem;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-card);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
 .room-pill strong {
   color: var(--accent-blue);
+}
+
+@media (max-width: 480px) {
+  .top-bar {
+    padding: 0.8rem 0.6rem;
+  }
+  .brand-title {
+    font-size: 1.05rem;
+  }
+  .btn-host-menu {
+    font-size: 0.7rem;
+    padding: 0.22rem 0.5rem;
+  }
+  .host-menu-container {
+    left: 0.6rem;
+  }
+  .top-meta {
+    right: 0.6rem;
+  }
+  .room-pill {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.45rem;
+  }
 }
 
 /* Main Content & Screens */
@@ -375,17 +398,18 @@ body {
   border-radius: 2px;
 }
 
-/* Plotted Player Pins & Staggered Tiers */
+/* Plotted Player Pins & Smart Clusters */
 .player-pin-container {
   position: relative;
   width: 100%;
-  min-height: 90px;
+  min-height: 48px;
   margin-top: 6px;
   pointer-events: none;
 }
 
 .player-pin {
   position: absolute;
+  top: 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -393,6 +417,7 @@ body {
   transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
   pointer-events: auto;
+  z-index: 10;
 }
 
 /* Tier heights */

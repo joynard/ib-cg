@@ -607,44 +607,55 @@ class HotTakesGame {
       return;
     }
 
-    // Sort ascending by value to calculate non-overlapping tiers
+    // Sort ascending by stance value
     const sortedEntries = [...entries].sort((a, b) => a[1] - b[1]);
-    let currentTier = 0;
-    let prevVal = -999;
 
+    // Group close proximity pins (difference <= 4%) into smart clusters
+    const clusters = [];
     sortedEntries.forEach(([name, val]) => {
-      // If within 15% of previous pin, bump tier to avoid label collision
-      if (Math.abs(val - prevVal) < 15) {
-        currentTier = (currentTier + 1) % 3;
-      } else {
-        currentTier = 0;
-      }
-      prevVal = val;
-
       const isMe = (name.toLowerCase() === this.playerName.toLowerCase());
+      if (clusters.length === 0) {
+        clusters.push({ avgVal: val, players: [{ name, val, isMe }] });
+      } else {
+        const lastCluster = clusters[clusters.length - 1];
+        if (Math.abs(val - lastCluster.avgVal) <= 4) {
+          lastCluster.players.push({ name, val, isMe });
+          const sum = lastCluster.players.reduce((acc, p) => acc + p.val, 0);
+          lastCluster.avgVal = Math.round(sum / lastCluster.players.length);
+        } else {
+          clusters.push({ avgVal: val, players: [{ name, val, isMe }] });
+        }
+      }
+    });
+
+    clusters.forEach(cluster => {
       const pin = document.createElement('div');
+      const val = cluster.avgVal;
+      const hasMe = cluster.players.some(p => p.isMe);
 
       // Horizontal boundary clamping classes
       let alignClass = 'pin-centered';
       if (val <= 15) alignClass = 'pin-edge-left';
       else if (val >= 85) alignClass = 'pin-edge-right';
 
-      pin.className = `player-pin tier-${currentTier} ${alignClass} ${isMe ? 'is-me' : ''}`;
+      pin.className = `player-pin ${alignClass} ${hasMe ? 'is-me' : ''}`;
       pin.style.left = `calc(12px + (${val} / 100) * (100% - 24px))`;
 
       const dot = document.createElement('div');
       dot.className = 'player-pin-dot';
       pin.appendChild(dot);
 
-      if (currentTier > 0) {
-        const stem = document.createElement('div');
-        stem.className = 'player-pin-stem';
-        pin.appendChild(stem);
-      }
-
       const label = document.createElement('div');
       label.className = 'player-pin-name';
-      label.textContent = `${name} (${val}%)`;
+
+      if (cluster.players.length === 1) {
+        const p = cluster.players[0];
+        label.textContent = `${p.name} (${p.val}%)`;
+      } else if (cluster.players.length === 2) {
+        label.textContent = `${cluster.players[0].name}, ${cluster.players[1].name} (${val}%)`;
+      } else {
+        label.textContent = `${cluster.players[0].name}, ${cluster.players[1].name} +${cluster.players.length - 2} (${val}%)`;
+      }
 
       pin.appendChild(label);
       this.playerPinContainer.appendChild(pin);
