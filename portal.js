@@ -16,6 +16,13 @@ const GAMES_DATA = [
     description: 'Semua peserta mendapatkan satu kata rahasia yang sama kecuali satu orang Impostor. Sebutkan satu kata petunjuk bergiliran di dunia nyata, cari siapa yang mencurigakan, dan lakukan voting!',
     url: 'sabotase-kata.html',
     btnLabel: 'Mainkan Game'
+  },
+  {
+    id: 'hot-takes-radar',
+    title: 'Hot Takes Radar',
+    description: 'Pernyataan kontroversial ringan untuk menguji pandangan anggota CG. Geser slider dari Sangat Tidak Setuju (0%) sampai Sangat Setuju (100%), lihat petanya di garis spektrum realtime, dan adu argumen!',
+    url: 'hot-takes-radar.html',
+    btnLabel: 'Mainkan Game'
   }
 ];
 

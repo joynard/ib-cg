@@ -37,3 +37,4 @@ const SABOTASE_WORDS = {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SABOTASE_WORDS };
 }
+

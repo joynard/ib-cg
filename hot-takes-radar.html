@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hot Takes Radar | IB CG</title>
+  <meta name="description" content="Hot Takes Radar - Peta spektrum setuju atau tidak setuju ekstrem Connect Group secara real-time.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.peerjs.com wss://*.peerjs.com https://unpkg.com; img-src 'self' data:; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
+  <!-- Favicon / App Icon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <!-- PeerJS -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <link rel="stylesheet" href="hot-takes.css">
+</head>
+<body>
+  <div class="ambient-glow glow-top"></div>
+
+  <div class="app-container">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <h1 class="brand-title">HOT TAKES <span class="highlight">RADAR</span></h1>
+      <div class="top-meta" id="topMeta" style="display: none;">
+        <span class="room-pill">ROOM: <strong id="displayRoomCode">RADAR-XXXX</strong></span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- SCREEN 1: WELCOME & JOIN -->
+      <section class="screen active" id="screenWelcome">
+        <div class="game-card">
+          <h2 class="card-title">HOT TAKES RADAR</h2>
+          <p class="card-subtitle">Petakan posisi pandanganmu di garis spektrum secara real-time dan temukan siapa teman CG yang posisinya paling berseberangan!</p>
+
+          <div class="form-group">
+            <label for="playerNameInput">Nama Panggilan</label>
+            <input type="text" id="playerNameInput" placeholder="Contoh: Samuel" maxlength="15" autocomplete="off">
+          </div>
+
+          <div class="action-stack">
+            <button class="btn btn-primary" id="btnCreateRoom">Buat Room Baru (Host)</button>
+            <div class="join-divider"><span>ATAU GABUNG ROOM</span></div>
+            <div class="join-group">
+              <input type="text" id="joinCodeInput" placeholder="KODE ROOM" maxlength="10">
+              <button class="btn btn-secondary" id="btnJoinRoom">Gabung</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 2: LOBBY -->
+      <section class="screen" id="screenLobby">
+        <div class="game-card">
+          <h2 class="card-title">LOBBY RADAR</h2>
+          <p class="card-subtitle">Bagikan kode room ini ke teman-teman di ruangan CG.</p>
+
+          <div style="text-align: center; margin-bottom: 1.2rem;">
+            <span class="room-pill" style="font-size: 1.1rem; padding: 0.5rem 1.2rem;">
+              KODE: <strong id="lobbyCodeBadge">RADAR-0000</strong>
+            </span>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 700; margin-bottom: 0.4rem;">
+            <span>PEMAIN TERHUBUNG</span>
+            <span><strong id="connectedCount">1</strong> / 24</span>
+          </div>
+
+          <div class="player-list" id="playerListContainer"></div>
+
+          <button class="btn btn-primary" id="btnStartGame" disabled>Mulai Hot Takes Radar</button>
+          <p class="card-subtitle" id="lobbyNotice" style="margin-top: 1rem; display: none;">Menunggu Host memulai sesi radar...</p>
+        </div>
+      </section>
+
+      <!-- SCREEN 3: RADAR SPECTRUM & SLIDER -->
+      <section class="screen" id="screenRadar">
+        <div class="game-card">
+          <!-- Statement Card -->
+          <div class="statement-box">
+            <div class="statement-tag" id="statementTag">HOT TAKE #1</div>
+            <h2 class="statement-text" id="statementText">Memuat pernyataan...</h2>
+          </div>
+
+          <!-- Real-Time Spectrum Radar Line -->
+          <div class="spectrum-section">
+            <div class="spectrum-header">
+              <span class="label-disagree">0% SANGAT TIDAK SETUJU</span>
+              <span class="label-neutral">50% NETRAL</span>
+              <span class="label-agree">100% SANGAT SETUJU</span>
+            </div>
+
+            <div class="spectrum-track">
+              <!-- Dynamically plotted player pins -->
+              <div class="player-pin-container" id="playerPinContainer"></div>
+            </div>
+          </div>
+
+          <!-- Interactive Slider Box -->
+          <div class="slider-container">
+            <div class="slider-val-display" id="sliderValDisplay">50% — Netral</div>
+            <input type="range" class="custom-range" id="sliderRange" min="0" max="100" value="50">
+            <button class="btn btn-primary" id="btnLockStance">Kirim Posisi Pandangan</button>
+          </div>
+
+          <!-- 30-Second Showdown Card -->
+          <div class="showdown-box" id="showdownBox" style="display: none;">
+            <div class="showdown-header">DUA POSISI PALING BERSEBERANGAN</div>
+            <div class="versus-grid">
+              <div class="fighter-card disagree-side">
+                <div class="fighter-stance label-disagree">KONTRA (<span id="fighterDisagreeVal">0%</span>)</div>
+                <div class="fighter-name" id="fighterDisagreeName">-</div>
+              </div>
+              <div class="versus-badge">VS</div>
+              <div class="fighter-card agree-side">
+                <div class="fighter-stance label-agree">PRO (<span id="fighterAgreeVal">100%</span>)</div>
+                <div class="fighter-name" id="fighterAgreeName">-</div>
+              </div>
+            </div>
+
+            <div class="debate-timer-circle" id="debateTimerDisplay">30s</div>
+            <button class="btn btn-secondary" id="btnStartDebateTimer" style="margin-top: 0.6rem;">Mulai Timer Adu Argumen (30s) ⏱️</button>
+          </div>
+
+          <!-- Host Controls -->
+          <div id="hostControlsSection" style="display: none; margin-top: 1.5rem;">
+            <button class="btn btn-primary" id="btnNextStatement">Pernyataan Selanjutnya ➔</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toastNotification" class="toast-popup" aria-live="polite"></div>
+
+  <script src="realtime.js"></script>
+  <script src="hot-takes-statements.js"></script>
+  <script src="hot-takes.js"></script>
+</body>
+</html>
