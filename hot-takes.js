@@ -163,7 +163,13 @@ class HotTakesGame {
   updateSliderLabel(val) {
     let text = `${val}% — Netral`;
     let color = 'var(--color-neutral)';
-    if (val <= 15) {
+    if (val === 0) {
+      text = '0% — Mentok Kiri';
+      color = 'var(--color-disagree)';
+    } else if (val === 100) {
+      text = '100% — Mentok Kanan';
+      color = 'var(--color-agree)';
+    } else if (val <= 15) {
       text = `${val}% — Sangat Tidak Setuju!`;
       color = 'var(--color-disagree)';
     } else if (val <= 35) {
