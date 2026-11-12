@@ -64,7 +64,7 @@ class GamePortal {
         </div>
 
         <div class="card-actions">
-          <a href="${encodeURI(game.url)}" class="btn-play">${escapeHTML(game.btnLabel || 'Mainkan Game')} ➔</a>
+          <a href="${encodeURI(game.url)}" class="btn-play">${escapeHTML(game.btnLabel || 'Mainkan Game')}</a>
         </div>
       `;
 
