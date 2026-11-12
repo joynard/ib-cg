@@ -516,10 +516,10 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.85rem 1.25rem;
+  padding: 0.88rem 1.3rem;
   border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 0.94rem;
+  font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
   border: none;
@@ -533,62 +533,73 @@ body {
   cursor: not-allowed;
 }
 
-/* Player Lock Button */
-.btn-lock-stance {
+.btn-primary {
   background: linear-gradient(135deg, #0284c7, #0369a1);
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35);
 }
 
-.btn-lock-stance:hover:not(:disabled) {
+.btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #38bdf8, #0284c7);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.4);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.45);
 }
 
-/* 30s Showdown Start Debate Button */
-.btn-start-debate {
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
-  color: #ffffff;
-  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
-  margin-top: 0.4rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+.btn-secondary {
+  background: #141c26;
+  color: var(--text-cream);
+  border: 1px solid var(--border-card);
 }
 
-.btn-start-debate:hover:not(:disabled) {
-  background: linear-gradient(135deg, #fbbf24, #f43f5e);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 22px rgba(239, 68, 68, 0.55);
+.btn-secondary:hover:not(:disabled) {
+  background: #1c2736;
+  border-color: var(--accent-blue);
 }
 
-/* Host Controls Section */
-.host-controls-wrapper {
-  margin-top: 1.6rem;
-  padding-top: 1.2rem;
-  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+/* Join Stack & Divider */
+.action-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.join-divider {
+  display: flex;
+  align-items: center;
   text-align: center;
+  margin: 1.4rem 0;
+  color: var(--text-subtle);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
-.host-panel-label {
-  font-size: 0.68rem;
+.join-divider::before, .join-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-card);
+}
+
+.join-divider span {
+  padding: 0 0.8rem;
+}
+
+.join-group {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.join-group input {
+  flex: 1;
+  text-align: center;
   font-weight: 800;
-  color: var(--text-subtle);
   letter-spacing: 0.08em;
-  margin-bottom: 0.6rem;
   text-transform: uppercase;
 }
 
-.btn-host-next {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-cream);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.btn-host-next:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #ffffff;
+.join-group .btn {
+  width: auto;
+  padding: 0.85rem 1.4rem;
+  white-space: nowrap;
 }
 
 /* Form Controls */
@@ -598,6 +609,29 @@ body {
 
 .form-group label {
   display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-cream);
+  margin-bottom: 0.45rem;
+}
+
+.form-group input, .join-group input {
+  width: 100%;
+  padding: 0.88rem 1rem;
+  background: #080b0e;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  color: var(--text-white);
+  font-family: inherit;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input:focus, .join-group input:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--text-cream);

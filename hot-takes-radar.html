@@ -39,9 +39,6 @@
       <!-- SCREEN 1: WELCOME & JOIN -->
       <section class="screen active" id="screenWelcome">
         <div class="game-card">
-          <h2 class="card-title">HOT TAKES RADAR</h2>
-          <p class="card-subtitle">Petakan posisi pandanganmu di garis spektrum secara real-time dan temukan siapa teman CG yang posisinya paling berseberangan!</p>
-
           <div class="form-group">
             <label for="playerNameInput">Nama Panggilan</label>
             <input type="text" id="playerNameInput" placeholder="Contoh: Samuel" maxlength="15" autocomplete="off">
@@ -61,12 +58,9 @@
       <!-- SCREEN 2: LOBBY -->
       <section class="screen" id="screenLobby">
         <div class="game-card">
-          <h2 class="card-title">LOBBY RADAR</h2>
-          <p class="card-subtitle">Bagikan kode room ini ke teman-teman di ruangan CG.</p>
-
           <div style="text-align: center; margin-bottom: 1.2rem;">
-            <span class="room-pill" style="font-size: 1.1rem; padding: 0.5rem 1.2rem;">
-              KODE: <strong id="lobbyCodeBadge">RADAR-0000</strong>
+            <span class="room-pill" style="font-size: 1.15rem; padding: 0.55rem 1.4rem;">
+              KODE: <strong id="lobbyCodeBadge">TAKE-0000</strong>
             </span>
           </div>
 
@@ -78,7 +72,7 @@
           <div class="player-list" id="playerListContainer"></div>
 
           <button class="btn btn-primary" id="btnStartGame" disabled>Mulai Hot Takes Radar</button>
-          <p class="card-subtitle" id="lobbyNotice" style="margin-top: 1rem; display: none;">Menunggu Host memulai sesi radar...</p>
+          <p id="lobbyNotice" style="margin-top: 1rem; display: none; text-align: center; color: var(--text-muted); font-size: 0.85rem;">Menunggu Host memulai game...</p>
         </div>
       </section>
 
