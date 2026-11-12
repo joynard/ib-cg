@@ -534,6 +534,11 @@ class HotTakesGame {
     }
     this.debateSecondsLeft = 30;
     this.debateTimerDisplay.textContent = '30s';
+    this.debateTimerDisplay.classList.remove('critical');
+
+    if (this.btnStartDebateTimer) {
+      this.btnStartDebateTimer.disabled = false;
+    }
 
     this.currentStatementIndex = index;
     this.currentStatementText = text;
@@ -554,11 +559,11 @@ class HotTakesGame {
 
     // Restrict moderator-only controls
     if (this.mode === 'HOST') {
-      this.hostControlsSection.style.display = 'block';
-      this.btnStartDebateTimer.style.display = 'inline-flex';
+      this.hostControlsSection.style.setProperty('display', 'flex', 'important');
+      this.btnStartDebateTimer.style.setProperty('display', 'inline-flex', 'important');
     } else {
-      this.hostControlsSection.style.display = 'none';
-      this.btnStartDebateTimer.style.display = 'none';
+      this.hostControlsSection.style.setProperty('display', 'none', 'important');
+      this.btnStartDebateTimer.style.setProperty('display', 'none', 'important');
     }
 
     this.showScreen('radar');
@@ -662,7 +667,7 @@ class HotTakesGame {
     // If there is actual difference in stance
     if (agreePlayer[1] > disagreePlayer[1]) {
       this.showdownBox.style.display = 'block';
-      this.btnStartDebateTimer.style.display = (this.mode === 'HOST') ? 'inline-flex' : 'none';
+      this.btnStartDebateTimer.style.setProperty('display', (this.mode === 'HOST') ? 'inline-flex' : 'none', 'important');
       this.fighterDisagreeName.textContent = disagreePlayer[0];
       this.fighterDisagreeVal.textContent = `${disagreePlayer[1]}%`;
       this.fighterAgreeName.textContent = agreePlayer[0];
