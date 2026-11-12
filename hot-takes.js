@@ -246,15 +246,30 @@ class HotTakesGame {
   onPlayerConnected(conn) {
     const rawName = conn.metadata ? conn.metadata.name : `Pemain ${this.players.length + 1}`;
     const safeName = sanitizeString(rawName, 15) || `Pemain ${this.players.length + 1}`;
+    const sessionId = (conn.metadata && conn.metadata.sessionId) ? String(conn.metadata.sessionId) : `sess-${safeName}`;
 
-    const existingIdx = this.players.findIndex(p => p.name.toLowerCase() === safeName.toLowerCase());
+    // Cancel any pending disconnect purge timer for this player
+    if (this.disconnectTimers && this.disconnectTimers[safeName.toLowerCase()]) {
+      clearTimeout(this.disconnectTimers[safeName.toLowerCase()]);
+      delete this.disconnectTimers[safeName.toLowerCase()];
+    }
+
+    const existingIdx = this.players.findIndex(p => 
+      (p.sessionId && p.sessionId === sessionId) || p.name.toLowerCase() === safeName.toLowerCase()
+    );
+
     if (existingIdx >= 0) {
       this.players[existingIdx].id = conn.peer;
+      this.players[existingIdx].sessionId = sessionId;
+      this.players[existingIdx].name = safeName;
+      this.players[existingIdx].isOffline = false;
     } else if (this.players.length < 24) {
       this.players.push({
         id: conn.peer,
+        sessionId: sessionId,
         name: safeName,
-        isHost: false
+        isHost: false,
+        isOffline: false
       });
     }
 
@@ -279,15 +294,33 @@ class HotTakesGame {
     const discName = conn && conn.metadata ? conn.metadata.name : null;
     if (!discName) return;
 
+    if (!this.disconnectTimers) this.disconnectTimers = {};
+
     const idx = this.players.findIndex(p => p.name.toLowerCase() === discName.toLowerCase());
     if (idx >= 0 && !this.players[idx].isHost) {
-      this.players.splice(idx, 1);
-      delete this.stances[discName];
-      this.showToast(`${discName} keluar dari room.`);
+      // Mark as temporarily offline instead of deleting immediately
+      this.players[idx].isOffline = true;
       this.updateLobbyUI();
       window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
-      window.realtimeEngine.broadcast('SYNC_ALL_STANCES', { stances: this.stances });
-      this.renderSpectrumPins(this.stances);
+
+      // Grace period: allow 35 seconds to reconnect before purging
+      if (this.disconnectTimers[discName.toLowerCase()]) {
+        clearTimeout(this.disconnectTimers[discName.toLowerCase()]);
+      }
+
+      this.disconnectTimers[discName.toLowerCase()] = setTimeout(() => {
+        const curIdx = this.players.findIndex(p => p.name.toLowerCase() === discName.toLowerCase());
+        if (curIdx >= 0 && this.players[curIdx].isOffline) {
+          this.players.splice(curIdx, 1);
+          delete this.stances[discName];
+          this.showToast(`${discName} keluar dari room.`);
+          this.updateLobbyUI();
+          window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
+          window.realtimeEngine.broadcast('SYNC_ALL_STANCES', { stances: this.stances });
+          this.renderSpectrumPins(this.stances);
+        }
+        delete this.disconnectTimers[discName.toLowerCase()];
+      }, 35000);
     }
   }
 
@@ -600,8 +633,16 @@ class HotTakesGame {
         localStorage.removeItem(RADAR_STORAGE_KEY);
         return;
       }
-      this.playerNameInput.value = data.playerName || '';
-      this.joinCodeInput.value = data.roomCode || '';
+      if (data.playerName) this.playerNameInput.value = data.playerName;
+      if (data.roomCode) this.joinCodeInput.value = data.roomCode;
+
+      // Auto-reconnect if client disconnected and reloads page
+      if (data.mode === 'CLIENT' && data.playerName && data.roomCode) {
+        console.log('[HotTakes] Auto-reconnecting client to session:', data.roomCode);
+        setTimeout(() => {
+          this.handleJoinRoom();
+        }, 300);
+      }
     } catch (e) {
       localStorage.removeItem(RADAR_STORAGE_KEY);
     }

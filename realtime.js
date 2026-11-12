@@ -27,18 +27,23 @@ class RealtimeEngine {
     // Reconnection tracking
     this.hasConnectedOnce = false;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 3;
+    this.maxReconnectAttempts = 5;
 
     // Deduplication Set for multi-channel packets
     this.processedMsgIds = new Set();
+  }
 
-    // Listen for tab unload to gracefully notify host
-    if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => {
-        if (!this.isHost && this.hasConnectedOnce && this.playerName) {
-          this.sendToHost('LEAVE', { name: this.playerName });
-        }
-      });
+  // Persistent Client Session ID across tab refreshes
+  getClientSessionId() {
+    try {
+      let id = localStorage.getItem('CG_CLIENT_SESSION_ID');
+      if (!id) {
+        id = 'cli_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+        localStorage.setItem('CG_CLIENT_SESSION_ID', id);
+      }
+      return id;
+    } catch (e) {
+      return 'cli_ephemeral_' + Math.random().toString(36).substring(2, 10);
     }
   }
 
@@ -208,7 +213,7 @@ class RealtimeEngine {
 
     // Query Host via local BroadcastChannel
     if (this.broadcastChannel) {
-      this.sendToHost('JOIN', { name: playerName });
+      this.sendToHost('JOIN', { name: playerName, sessionId: this.getClientSessionId() });
     }
 
     // 2. Setup PeerJS Cloud Peer for cross-device multiplayer
@@ -267,9 +272,10 @@ class RealtimeEngine {
       if (this.isDuplicateMsg(data)) return;
 
       if (this.isHost && type === 'CLIENT_TO_HOST') {
+        const senderSessionId = (data.payload && data.payload.sessionId) ? data.payload.sessionId : `local-${sender}`;
         const mockConn = {
           peer: `local-${sender}`,
-          metadata: { name: sender },
+          metadata: { name: sender, sessionId: senderSessionId },
           open: true,
           send: (packet) => {
             if (this.broadcastChannel) {
@@ -335,8 +341,9 @@ class RealtimeEngine {
 
   connectToHost(playerName, onConnected) {
     if (!this.peer) return;
+    const clientSessionId = this.getClientSessionId();
     this.hostConnection = this.peer.connect(this.roomCode, {
-      metadata: { name: playerName },
+      metadata: { name: playerName, sessionId: clientSessionId },
       reliable: true
     });
 
@@ -344,7 +351,7 @@ class RealtimeEngine {
       this.hasConnectedOnce = true;
       if (this.connectTimeout) clearTimeout(this.connectTimeout);
       this.reconnectAttempts = 0;
-      this.sendToHost('REJOIN', { name: playerName });
+      this.sendToHost('REJOIN', { name: playerName, sessionId: clientSessionId });
       if (this.onConnectedCallback) {
         this.onConnectedCallback();
         this.onConnectedCallback = null;

@@ -265,16 +265,31 @@ class SabotaseGame {
   onPlayerConnected(conn) {
     const rawName = conn.metadata ? conn.metadata.name : `Pemain ${this.players.length + 1}`;
     const safeName = sanitizeString(rawName, 15) || `Pemain ${this.players.length + 1}`;
+    const sessionId = (conn.metadata && conn.metadata.sessionId) ? String(conn.metadata.sessionId) : `sess-${safeName}`;
 
-    const existingIdx = this.players.findIndex(p => p.name.toLowerCase() === safeName.toLowerCase());
+    // Cancel pending disconnect purge timer for this player
+    if (this.disconnectTimers && this.disconnectTimers[safeName.toLowerCase()]) {
+      clearTimeout(this.disconnectTimers[safeName.toLowerCase()]);
+      delete this.disconnectTimers[safeName.toLowerCase()];
+    }
+
+    const existingIdx = this.players.findIndex(p => 
+      (p.sessionId && p.sessionId === sessionId) || p.name.toLowerCase() === safeName.toLowerCase()
+    );
+
     if (existingIdx >= 0) {
       this.players[existingIdx].id = conn.peer;
+      this.players[existingIdx].sessionId = sessionId;
+      this.players[existingIdx].name = safeName;
+      this.players[existingIdx].isOffline = false;
     } else if (this.players.length < 12) {
       this.players.push({
         id: conn.peer,
+        sessionId: sessionId,
         name: safeName,
         isHost: false,
-        isImpostor: false
+        isImpostor: false,
+        isOffline: false
       });
     }
 
@@ -287,27 +302,44 @@ class SabotaseGame {
     const discName = conn && conn.metadata ? conn.metadata.name : null;
     if (!discName) return;
 
+    if (!this.disconnectTimers) this.disconnectTimers = {};
+
     const idx = this.players.findIndex(p => p.name.toLowerCase() === discName.toLowerCase());
     if (idx >= 0 && !this.players[idx].isHost) {
-      this.players.splice(idx, 1);
-      this.showToast(`${discName} keluar dari room.`);
+      // Mark as temporarily offline with grace period instead of instant removal
+      this.players[idx].isOffline = true;
       this.updateLobbyUI();
       window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
 
-      // If disconnected during voting, adjust threshold
-      if (this.screens.voting.classList.contains('active')) {
-        delete this.votes[discName];
-        const voteCount = Object.keys(this.votes).length;
-        const totalCount = this.players.length;
-        window.realtimeEngine.broadcast('VOTING_PROGRESS', {
-          received: voteCount,
-          total: totalCount
-        });
-        this.votingProgressText.textContent = `${voteCount} dari ${totalCount} pemain telah memilih`;
-        if (voteCount >= totalCount && totalCount >= 2) {
-          this.tallyVotesAndReveal();
-        }
+      if (this.disconnectTimers[discName.toLowerCase()]) {
+        clearTimeout(this.disconnectTimers[discName.toLowerCase()]);
       }
+
+      this.disconnectTimers[discName.toLowerCase()] = setTimeout(() => {
+        const curIdx = this.players.findIndex(p => p.name.toLowerCase() === discName.toLowerCase());
+        if (curIdx >= 0 && this.players[curIdx].isOffline) {
+          this.players.splice(curIdx, 1);
+          this.showToast(`${discName} keluar dari room.`);
+          this.updateLobbyUI();
+          window.realtimeEngine.broadcast('SYNC_PLAYERS', { players: this.players });
+
+          // If disconnected during voting, adjust threshold
+          if (this.screens.voting.classList.contains('active')) {
+            delete this.votes[discName];
+            const voteCount = Object.keys(this.votes).length;
+            const totalCount = this.players.length;
+            window.realtimeEngine.broadcast('VOTING_PROGRESS', {
+              received: voteCount,
+              total: totalCount
+            });
+            this.votingProgressText.textContent = `${voteCount} dari ${totalCount} pemain telah memilih`;
+            if (voteCount >= totalCount && totalCount >= 2) {
+              this.tallyVotesAndReveal();
+            }
+          }
+        }
+        delete this.disconnectTimers[discName.toLowerCase()];
+      }, 35000);
     }
   }
 
@@ -745,8 +777,16 @@ class SabotaseGame {
         localStorage.removeItem(SABO_STORAGE_KEY);
         return;
       }
-      this.playerNameInput.value = data.playerName || '';
-      this.joinCodeInput.value = data.roomCode || '';
+      if (data.playerName) this.playerNameInput.value = data.playerName;
+      if (data.roomCode) this.joinCodeInput.value = data.roomCode;
+
+      // Auto-reconnect if client reloads page
+      if (data.mode === 'CLIENT' && data.playerName && data.roomCode) {
+        console.log('[Sabotase] Auto-reconnecting client to session:', data.roomCode);
+        setTimeout(() => {
+          this.handleJoinRoom();
+        }, 300);
+      }
     } catch (e) {
       localStorage.removeItem(SABO_STORAGE_KEY);
     }
