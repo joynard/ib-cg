@@ -530,7 +530,7 @@ class HotTakesGame {
     this.isDebateLocked = true;
     this.sliderRange.disabled = true;
     this.btnLockStance.disabled = true;
-    this.btnLockStance.textContent = '🔒 Posisi Terkunci (Sedang Adu Argumen)';
+    this.btnLockStance.textContent = 'Posisi Terkunci (Sedang Adu Argumen)';
     if (this.btnStartDebateTimer) {
       this.btnStartDebateTimer.disabled = true;
     }
@@ -541,7 +541,7 @@ class HotTakesGame {
         clearInterval(this.debateTimerInterval);
         this.debateTimerDisplay.textContent = '0s';
         this.debateTimerDisplay.classList.remove('critical');
-        this.showToast('⏱️ Waktu adu argumen 30 detik selesai!');
+        this.showToast('Waktu adu argumen 30 detik selesai!');
       } else {
         this.debateTimerDisplay.textContent = `${this.debateSecondsLeft}s`;
         if (this.debateSecondsLeft <= 10) {
