@@ -73,7 +73,7 @@ class GamePortal {
   openModal(gameTitle) {
     if (!this.modal) return;
     if (this.modalDesc) {
-      this.modalDesc.innerHTML = `Game <strong>${escapeHTML(gameTitle)}</strong> sedang tidak aktif minggu ini. Sesi Connect Group saat ini dijadwalkan memainkan <strong>Hot Takes Radar</strong>.`;
+      this.modalDesc.innerHTML = `Game <strong>${escapeHTML(gameTitle)}</strong> sedang tidak aktif minggu ini.`;
     }
     this.modal.classList.add('active');
   }
